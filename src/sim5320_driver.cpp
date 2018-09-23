@@ -1,4 +1,4 @@
-#include "sim5320_driver.h"
+﻿#include "sim5320_driver.h"
 #include <string.h>
 using namespace sim5320;
 
@@ -144,6 +144,8 @@ int SIM5320::init()
 bool SIM5320::reset()
 {
     DriverLock(this);
+    // close network if it's opened
+    _parser.send("AT+NETCLOSE") && _parser.recv("OK\n");
 
     bool done = _parser.send("AT+CRESET") && _parser.recv("OK\n");
     if (!done) {
@@ -258,6 +260,92 @@ void SIM5320::network_get_operator_name(char name[64])
     if (!done) {
         name[0] = '\0';
     }
+}
+
+static char* PDP_TYPE_MAP[] = {
+    "IP",
+    "PPP",
+    "IPV6"
+};
+
+#define NETWORK_STATUS_CHECK_DELAY 1000
+#define NETWORK_STATUS_CHECK_MAX_ATTEMPTS 30
+
+bool SIM5320::network_configure_context(const char* apn, const char* user, const char* password, SIM5320::NetworkDPDType pdp_type)
+{
+    DriverLock(this);
+    bool done;
+    // configure PDP context
+    done = _parser.send("AT+CGSOCKCONT=%d,\"%s\",\"%s\"", PDP_CONTEXT_NO, PDP_TYPE_MAP[pdp_type], apn) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    done = _parser.send("AT+CSOCKSETPN=%d", PDP_CONTEXT_NO) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    // set authentication parameters
+    if (user != NULL && password != NULL) {
+        done = _parser.send("AT+CSOCKAUTH=%d,1,\"%s\",\"%s\"", PDP_CONTEXT_NO, password, user) && _parser.recv("OK\n");
+    } else if (user == NULL && password != NULL) {
+        done = _parser.send("AT+CSOCKAUTH=%d,2,\"%s\"", PDP_CONTEXT_NO, password) && _parser.recv("OK\n");
+    } else if (user == NULL && password == NULL) {
+        done = _parser.send("AT+CSOCKAUTH=%d,0", PDP_CONTEXT_NO) && _parser.recv("OK\n");
+    } else {
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_ERROR_CODE_INVALID_ARGUMENT, MBED_MODULE_APPLICATION), "Password is NULL and user is not null");
+    }
+    if (!done) {
+        return false;
+    }
+    // use non-transparent (command) mode
+    done = _parser.send("AT+CIPMODE=0") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    // open network
+    done = _parser.send("AT+NETOPEN") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    int net_state = 0, mode = 0;
+    // wait network activation
+    for (int i = 0; i < NETWORK_STATUS_CHECK_MAX_ATTEMPTS; i++) {
+        done = _parser.send("AT+NETOPEN?") && _parser.recv("+NETOPEN: %d,%d\n", &net_state, &mode) && _parser.recv("OK\n");
+        if (!done) {
+            return false;
+        }
+        if (net_state == 1) {
+            break;
+        }
+        wait_ms(NETWORK_STATUS_CHECK_DELAY);
+    }
+    if (net_state != 1) {
+        return false;
+    }
+
+    return true;
+}
+
+void SIM5320::network_get_device_ip_address(char ip_address[46])
+{
+    DriverLock(this);
+    bool done;
+    char buffer[64];
+
+    done = _parser.send("AT+IPADDR") && _parser.recv("%63[^\n]\n", &buffer);
+    if (!done) {
+        ip_address[0] = '\0';
+        return;
+    }
+
+    int res = sscanf(buffer, "+IPADDR: %45s", ip_address);
+    if (res != 1) {
+        ip_address[0] = '\0';
+        return;
+    }
+
+    // clear other output
+    _parser.flush();
 }
 
 #define CTRZ_Z_SYM '\x1A'

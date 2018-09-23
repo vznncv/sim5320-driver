@@ -174,6 +174,32 @@ public:
      */
     void network_get_operator_name(char name[64]);
 
+    enum NetworkDPDType {
+        NETWORK_PDP_TYPE_IP = 0,
+        NETWORK_PDP_TYPE_PPP = 1,
+        NETWORK_PDP_TYPE_IPV6 = 2
+    };
+
+    /**
+     * Configure network context.
+     *
+     * This settings should be set if you want to use IP protocols.
+     *
+     * @param apn apn point name
+     * @param user user name
+     * @param password user password
+     * @param pdp_type pdp type
+     * @return true if network has been configure successfully.
+     */
+    bool network_configure_context(const char* apn, const char* user, const char* password, NetworkDPDType pdp_type = NETWORK_PDP_TYPE_IP);
+
+    /**
+     * Get current IP address.
+     *
+     * @param ip_address the string will be empty if there network isn't configured
+     */
+    void network_get_device_ip_address(char ip_address[46]);
+
     //----------------------------------------------------------------
     // SMS functions
     //----------------------------------------------------------------
@@ -186,6 +212,10 @@ public:
      * @return true if message is send successfully
      */
     bool sms_send_message(const char* number, const char* text);
+
+    //----------------------------------------------------------------
+    // FTP functions
+    //----------------------------------------------------------------
 
     //----------------------------------------------------------------
     // GPS function
@@ -262,6 +292,9 @@ private:
     // default GPS settings
     const static char* GPS_ASSIST_SERVER_URL;
     const static bool GPS_ASSIST_SERVER_SSL;
+
+    // to simplify internal logic only one PDP context will be used
+    const static int PDP_CONTEXT_NO = 1;
 
     PlatformMutex _mutex;
 
