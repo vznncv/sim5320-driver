@@ -16,6 +16,9 @@ struct gps_coord_t {
     time_t time;
 };
 
+/**
+ * SIM5320 device driver.
+ */
 class SIM5320 : private NonCopyable<SIM5320> {
 public:
     /**
@@ -119,6 +122,72 @@ public:
     bool is_active();
 
     //----------------------------------------------------------------
+    // Common network function
+    //----------------------------------------------------------------
+
+    /**
+     * Wait till device is registered in the network.
+     *
+     * If device is registered in the network, you can send SMS and send/receive data.
+     *
+     * @param timeout
+     * @return true if it's succeed, otherwise false
+     */
+    bool network_wait_registration(int timeout = 16000);
+
+    /**
+     * Check if device is registered in the network.
+     *
+     * @return
+     */
+    bool network_is_registered();
+
+    /**
+     * Get network signal strength in dBm.
+     *
+     * If network isn't available, NaN is returned.
+     *
+     * @return
+     */
+    float network_get_signal_strength();
+
+    enum NetworkType {
+        NETWORK_TYPE_NO_SERVICE = 0, // no network
+        NETWORK_TYPE_GSM = 1, // 2G network
+        NETWORK_TYPE_GPRS = 2, // 2G network
+        NETWORK_TYPE_EGPRS = 3, // EDGE, 2.5G network
+        NETWORK_TYPE_WCDMA = 4, // 3G network
+        NETWORK_TYPE_HSPA = 5, // 3.5G network
+    };
+
+    /**
+     * Get current network type.
+     *
+     * @return
+     */
+    NetworkType network_get_type();
+
+    /**
+     * Get operator name;
+     *
+     * @param name output string (it should contain at least place for 64 symbols)
+     */
+    void network_get_operator_name(char name[64]);
+
+    //----------------------------------------------------------------
+    // SMS functions
+    //----------------------------------------------------------------
+
+    /**
+     * Send SMS.
+     *
+     * @param number destination number
+     * @param text message text
+     * @return true if message is send successfully
+     */
+    bool sms_send_message(const char* number, const char* text);
+
+    //----------------------------------------------------------------
     // GPS function
     //----------------------------------------------------------------
 
@@ -175,7 +244,8 @@ private:
     ATCmdParser _parser;
 
     enum State {
-        CLEANUP_SERIAL = 0x01,
+        STATE_CLEANUP_SERIAL = 0x01,
+        STATE_DEBUG_ON = 0x02
     };
     // helper variables to hold some driver parameters
     uint8_t _state;

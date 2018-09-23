@@ -36,7 +36,7 @@ SIM5320::SIM5320(PinName tx, PinName rx, PinName rts, PinName cts)
 
 SIM5320::~SIM5320()
 {
-    if (_state & SIM5320::CLEANUP_SERIAL) {
+    if (_state & SIM5320::STATE_CLEANUP_SERIAL) {
         delete _serial_ptr;
     }
 }
@@ -45,6 +45,11 @@ void SIM5320::debug_on(bool on)
 {
     DriverLock(this);
     _parser.debug_on(on);
+    if (on) {
+        _state |= STATE_DEBUG_ON;
+    } else {
+        _state &= ~STATE_DEBUG_ON;
+    }
 }
 
 bool SIM5320::at_available()
@@ -125,6 +130,14 @@ int SIM5320::init()
         return code;
     }
 
+    // configure network preferences
+    // set network order preference: WCDMA,GSM
+    done = _parser.send("AT+CRPAAO=1") && _parser.recv("OK\n");
+    //done = done && _parser.send("AT+CNAOP=2") && _parser.recv("OK\n");
+    if (!done) {
+        return MBED_ERROR_CODE_INITIALIZATION_FAILED;
+    }
+
     return MBED_SUCCESS;
 }
 
@@ -140,11 +153,13 @@ bool SIM5320::reset()
     for (int i = 0; i < 10; i++) {
         done = _parser.recv("START\n");
         if (done) {
-            return true;
+            break;
         }
     }
+    // switch module into minimum functionality mode
+    stop();
 
-    return false;
+    return done;
 }
 
 void SIM5320::get_imei(char imei[])
@@ -172,6 +187,110 @@ bool SIM5320::is_active()
     _parser.send("AT+CFUN?");
     _parser.recv("+CFUN: %d\n", &mode) && _parser.recv("OK\n");
     return mode != 0;
+}
+
+#define NETWORK_CHECK_DELAY_MS 500
+
+bool SIM5320::network_wait_registration(int timeout)
+{
+    DriverLock(this);
+    Timer timer;
+    timer.start();
+    while (!network_is_registered()) {
+        if (timer.read_ms() > timeout) {
+            return false;
+        }
+        wait_ms(NETWORK_CHECK_DELAY_MS);
+    }
+    return true;
+}
+
+bool SIM5320::network_is_registered()
+{
+    DriverLock(this);
+    int n, stat;
+
+    _parser.send("AT+CREG?");
+    _parser.recv("+CREG: %d,%d", &n, &stat) && _parser.recv("OK\n");
+    return stat == 1 || stat == 5;
+}
+
+float SIM5320::network_get_signal_strength()
+{
+    DriverLock(this);
+    int rssi = 99, ber = 99;
+    _parser.send("AT+CSQ") && _parser.recv("+CSQ:%d,%d\n", &rssi, &ber) && _parser.recv("OK\n");
+    if (0 <= rssi && rssi < 99) {
+        return -113 + 2 * rssi;
+    } else {
+        return NAN;
+    }
+}
+
+static SIM5320::NetworkType NETWORK_TYPE_CODE_MAP[] = {
+    SIM5320::NETWORK_TYPE_NO_SERVICE,
+    SIM5320::NETWORK_TYPE_GSM,
+    SIM5320::NETWORK_TYPE_GPRS,
+    SIM5320::NETWORK_TYPE_EGPRS,
+    SIM5320::NETWORK_TYPE_WCDMA,
+    SIM5320::NETWORK_TYPE_HSPA,
+    SIM5320::NETWORK_TYPE_HSPA,
+    SIM5320::NETWORK_TYPE_HSPA
+};
+
+SIM5320::NetworkType SIM5320::network_get_type()
+{
+    DriverLock(this);
+    int n = 0, state = 0;
+    _parser.send("AT+CNSMOD?") && _parser.recv("+CNSMOD: %d,%d\n", &n, &state) && _parser.recv("OK\n");
+    state = state < 0 ? 0 : state;
+    state = state > 7 ? 7 : state;
+    return NETWORK_TYPE_CODE_MAP[state];
+}
+
+void SIM5320::network_get_operator_name(char name[64])
+{
+    DriverLock(this);
+    int model, format, act;
+    bool done;
+
+    done = _parser.send("AT+COPS?") && _parser.recv("+COPS: %d,%d,\"%63[^\"]\",%d\n", &model, &format, name, &act) && _parser.recv("OK\n");
+    if (!done) {
+        name[0] = '\0';
+    }
+}
+
+#define CTRZ_Z_SYM '\x1A'
+
+bool SIM5320::sms_send_message(const char* number, const char* text)
+{
+    DriverLock(this);
+    bool done;
+
+    // set text mode
+    done = _parser.send("AT+CMGF=1") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    // send sms
+    _parser.send("AT+CMGS=\"%s\"", number);
+    _parser.recv(">");
+    // try to send message even ">" isn't get
+    if (_state && STATE_DEBUG_ON) {
+        printf("AT MESSAGE> %s\n", text);
+    }
+
+    const char* pos = text;
+    char sym;
+    while ((sym = *(pos++)) != '\0') {
+        // replace CTRL+Z to prevent accident message sending
+        sym = sym == CTRZ_Z_SYM ? ' ' : sym;
+        _parser.putc(sym);
+    }
+    _parser.putc(CTRZ_Z_SYM); // end of message
+
+    done = _parser.recv("OK\n");
+    return done;
 }
 
 int SIM5320::gps_init()

@@ -13,6 +13,7 @@ The SIM5320 documentation can be found here:
 The library allows:
 
 - get GPS coordinates and current UTC time
+- send SMS
 
 ## Driver usage
 
@@ -44,5 +45,4 @@ you can reset device to factory settings, using the following steps:
 
 - add functions to use TCP and UDP connection
 - add mbed-os network stack compatable interface
-- add SMS functionality
 - add FTP client functionality
