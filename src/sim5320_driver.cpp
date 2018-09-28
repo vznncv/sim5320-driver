@@ -160,6 +160,9 @@ bool SIM5320::reset()
     }
     // switch module into minimum functionality mode
     stop();
+    // wait end of the SIM and PD initialization
+    wait_ms(25000);
+    _parser.flush();
 
     return done;
 }
@@ -173,7 +176,17 @@ void SIM5320::get_imei(char imei[])
 bool SIM5320::start()
 {
     DriverLock(this);
-    return _parser.send("AT+CFUN=1") && _parser.recv("OK\n");
+    if (!is_active()) {
+        bool done = _parser.send("AT+CFUN=1") && _parser.recv("OK\n");
+        if (!done) {
+            return false;
+        }
+        // wait end of the SIM and PD initialization
+        wait_ms(25000);
+        _parser.flush();
+    }
+
+    return true;
 }
 
 bool SIM5320::stop()
@@ -379,6 +392,212 @@ bool SIM5320::sms_send_message(const char* number, const char* text)
 
     done = _parser.recv("OK\n");
     return done;
+}
+
+#define FTP_ACTION_TIMEOUT 32000
+
+int SIM5320::_ftp_read_ret_code(const char* command_name)
+{
+
+    char cmd_buff[20];
+    char ret_buff[20];
+    bool done = false;
+    int ret_code = 0;
+    sprintf(cmd_buff, "+CFTPS%s: %%s\n", command_name);
+    Timer timer;
+    timer.start();
+    while (!done && timer.read_ms() < FTP_ACTION_TIMEOUT) {
+        done = _parser.recv(cmd_buff, ret_buff);
+    }
+    if (!done) {
+        return -1;
+    }
+    int scan_ret = sscanf(ret_buff, "%d", &ret_code);
+    if (scan_ret != 1) {
+        return -2;
+    }
+    return ret_code;
+}
+
+bool SIM5320::ftp_connect(const char* host, int port, SIM5320::FTPProtocol protocol, const char* username, const char* password)
+{
+    DriverLock(this);
+    bool done;
+    // start ftp stack
+    done = _parser.send("AT+CFTPSSTART") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    // connect to ftp server
+    done = _parser.send("AT+CFTPSLOGIN=\"%s\",%d,\"%s\",\"%s\",%d", host, port, username, password, protocol) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    // wait login
+    return _ftp_read_ret_code("LOGIN") == 0;
+}
+
+bool SIM5320::ftp_get_cwd(char work_dir[256])
+{
+    DriverLock(this);
+    bool done;
+    done = _parser.send("AT+CFTPSPWD") && _parser.recv("+CFTPSPWD: \"%255[^\"]\"\n", work_dir) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    return true;
+}
+
+bool SIM5320::ftp_set_cwd(const char* work_dir)
+{
+    DriverLock(this);
+    bool done;
+    done = _parser.send("AT+CFTPSCWD=\"%s\"", work_dir) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    return true;
+}
+
+bool SIM5320::ftp_list_dir(const char* path, Callback<void(const char*)> name_callback)
+{
+    DriverLock(this);
+    bool done;
+    int err_code = 0;
+    done = _parser.send("AT+CFTPSLIST=\"%s\"", path) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    int data_size;
+    done = _parser.recv("+CFTPSLIST: DATA,%d\n", &data_size);
+    if (!done) {
+        return false;
+    }
+    // limited ftp list command parsing
+    const int max_size = 63;
+    int size = 0;
+    char buff[max_size + 1];
+
+    for (int i = 0; i < data_size; i++) {
+        int c = _parser.getc();
+        if (c < 0) {
+            return false;
+        }
+        if (_state & STATE_DEBUG_ON) {
+            printf("%c", (char)c);
+        }
+        // parse output
+        switch (c) {
+        case ' ':
+            size = 0;
+            break;
+        case '\n':
+        case '\r':
+            if (size != 0) {
+                buff[size] = '\0';
+                if (strcmp(buff, ".") != 0 && strcmp(buff, "..") != 0) {
+                    name_callback(buff);
+                }
+                size = 0;
+            }
+            break;
+        default:
+            if (size < max_size) {
+                buff[size] = c;
+                size++;
+            }
+        }
+    }
+    return _ftp_read_ret_code("LIST") == 0;
+}
+
+bool SIM5320::ftp_exists(const char* path, bool& result)
+{
+    DriverLock(this);
+    bool done;
+    char buff[20];
+    done = _parser.send("AT+CFTPSSIZE=\"%s\"", path) && _parser.recv("OK\n") && _parser.recv("+CFTPSSIZE: %s\n", &buff);
+    if (!done) {
+        return false;
+    }
+
+    int err_code = 0;
+    sscanf(buff, "%d", &err_code);
+    return err_code == 0;
+}
+
+bool SIM5320::ftp_mkdir(const char* path)
+{
+    DriverLock(this);
+    bool done;
+    done = _parser.send("AT+CFTPSMKD=\"%s\"", path) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+
+    return true;
+}
+
+bool SIM5320::ftp_rmdir(const char* path)
+{
+    DriverLock(this);
+    bool done;
+    done = _parser.send("AT+CFTPSRMD=\"%s\"", path) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+
+    return true;
+}
+
+bool SIM5320::ftp_rmfile(const char* path)
+{
+    DriverLock(this);
+    bool done;
+    done = _parser.send("AT+CFTPSDELE=\"%s\"", path) && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+
+    return true;
+}
+
+bool SIM5320::ftp_put(const char* path, Callback<ssize_t(uint8_t*, ssize_t)> data_reader)
+{
+    return false;
+}
+
+bool SIM5320::ftp_get(const char* path, Callback<ssize_t(uint8_t*, ssize_t)> data_writer)
+{
+    return false;
+}
+
+bool SIM5320::ftp_close()
+{
+    DriverLock(this);
+    bool done;
+    int ret_code;
+    // logout
+    done = _parser.send("AT+CFTPSLOGOUT") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    ret_code = _ftp_read_ret_code("LOGOUT");
+    if (ret_code != 0) {
+        return false;
+    }
+
+    // stop ftp stack
+    done = _parser.send("AT+CFTPSSTOP") && _parser.recv("OK\n");
+    if (!done) {
+        return false;
+    }
+    ret_code = _ftp_read_ret_code("STOP");
+    if (ret_code != 0) {
+        return false;
+    }
+
+    return true;
 }
 
 int SIM5320::gps_init()

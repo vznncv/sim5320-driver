@@ -28,7 +28,7 @@ public:
      */
     SIM5320(UARTSerial* _serial_ptr, PinName rts = NC, PinName cts = NC);
     /**
-     * Constructor
+     * Constructor.
      *
      * @param tx TX pin of the Serial interface
      * @param rx RX pin of the Serial interface
@@ -47,7 +47,7 @@ public:
     void debug_on(bool on);
 
     /**
-    * Check AT command interface of SIM5320
+    * Check AT command interface of SIM5320.
     *
     * @return true if it's ready for communication
     */
@@ -217,6 +217,121 @@ public:
     // FTP functions
     //----------------------------------------------------------------
 
+private:
+    int _ftp_read_ret_code(const char* command_name);
+
+public:
+    enum FTPProtocol {
+        FTP_PROTOCOL_FTP = 0,
+        FTP_PROTOCOL_FTPS_SSL = 1,
+        FTP_PROTOCOL_FTPS_TLS = 2,
+        FTP_RPOTOCOL_FTPS = 3
+    };
+
+    /**
+     * Connect to ftp server.
+     *
+     * @param host ftp server host
+     * @param port ftp port
+     * @param protocol ftp protocol (ftp or ftps)
+     * @param username username. If it isn't set then "anonymous"
+     * @param password user password
+     * @return true if operation succeeds
+     */
+    bool ftp_connect(const char* host, int port = 21, FTPProtocol protocol = FTP_PROTOCOL_FTP, const char* username = "anonymous", const char* password = "");
+
+    /**
+     * Get current working directory.
+     *
+     * @param work_dir
+     * @return true if operation succeeds
+     */
+    bool ftp_get_cwd(char work_dir[256]);
+
+    /**
+     * Set current working directory.
+     *
+     * @param work_dir
+     * @return if operation succeeds
+     */
+    bool ftp_set_cwd(const char* work_dir);
+
+    /**
+     * List files in the specified directory.
+     *
+     * For each filename the @p name_callback will be invoked with `filename`.
+     * To get full filepath you should concatenate @p path and `filename`.
+     *
+     * @param path directory path
+     * @param name_callback callback
+     * @return true if operation succeeds
+     */
+    bool ftp_list_dir(const char* path, Callback<void(const char*)> name_callback);
+
+    /**
+     * Check if file exists on a ftp server.
+     *
+     * @param path file path
+     * @param result true if file exists, otherwise false
+     * @return true if operation succeeds
+     */
+    bool ftp_exists(const char* path, bool& result);
+
+    /**
+     * Create a directory on a ftp server.
+     *
+     * @param path directory path
+     * @return true if operation succeeds
+     */
+    bool ftp_mkdir(const char* path);
+
+    /**
+     * Remove a directory on a ftp server.
+     *
+     * @param path directory path
+     * @return true if operation succeeds
+     */
+    bool ftp_rmdir(const char* path);
+
+    /**
+     * Remove a file on a ftp server.
+     *
+     * @param path file path
+     * @return true if operation succeeds
+     */
+    bool ftp_rmfile(const char* path);
+
+    /**
+     * Put file on an ftp server.
+     *
+     * The data source is callback @p data_reader. It accept buffer `data` and maximum data length `size`
+     * that it can accept. The callback should return actual amount of data that it put into `data`.
+     * If returned value is `0`, then transmission will be finished.
+     *
+     * @param path ftp file path
+     * @param data_reader callback to provide data
+     * @return true if operation succeeds
+     */
+    bool ftp_put(const char* path, Callback<ssize_t(uint8_t* data, ssize_t size)> data_reader);
+
+    /**
+     * Get file from ftp server.
+     *
+     * The read data will be processed by @p data_writer callback. It accepts buffer `data`, its length `size`,
+     * and returns amount of the data that has been processed.
+     *
+     * @param path ftp file path
+     * @param data_writer callback
+     * @return true if operation succeeds
+     */
+    bool ftp_get(const char* path, Callback<ssize_t(uint8_t* data, ssize_t size)> data_writer);
+
+    /**
+     * @brief ftp_close
+     * @return
+     */
+    bool ftp_close();
+
     //----------------------------------------------------------------
     // GPS function
     //----------------------------------------------------------------
@@ -272,6 +387,11 @@ public:
 private:
     UARTSerial* _serial_ptr;
     ATCmdParser _parser;
+    int _last_error_code;
+    int _last_ftp_error_code;
+
+    void _configure_oob();
+    void _check_command_retcode();
 
     enum State {
         STATE_CLEANUP_SERIAL = 0x01,
