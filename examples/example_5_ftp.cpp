@@ -118,6 +118,7 @@ int main()
     // FTPS demo
     // connect to server
     SIM5320FTPClient* ftp = sim5320.get_ftp_client();
+
     const char* ftp_host = "someftp-server.com";
     const char* ftp_user = "user";
     const char* ftp_password = "password";
