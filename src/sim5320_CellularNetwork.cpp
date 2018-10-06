@@ -3,8 +3,8 @@
 #include "sim5320_utils.h"
 using namespace sim5320;
 
-SIM5320CellularNetwork::SIM5320CellularNetwork(ATHandler& atHandler)
-    : AT_CellularNetwork(atHandler)
+SIM5320CellularNetwork::SIM5320CellularNetwork(ATHandler& at_handler)
+    : AT_CellularNetwork(at_handler)
 {
 }
 
@@ -19,7 +19,6 @@ nsapi_error_t SIM5320CellularNetwork::init()
         return err;
     }
     _at.lock();
-
     // set automatic selection between GSM and WCDMA
     // NOTE: the command can fails, so ignore any error
     int err_code = _at.get_last_error();
@@ -34,9 +33,12 @@ nsapi_error_t SIM5320CellularNetwork::init()
 }
 
 #define DEFAULT_PDP_CONTEXT_NO 1
+#define CONTEXT_ACTIVATION_TIMEOUT 16000
 
 nsapi_error_t SIM5320CellularNetwork::activate_context()
 {
+    nsapi_error_t err;
+
     // check that apn is set
     if (!_apn) {
         return NSAPI_ERROR_NO_CONNECTION;
@@ -63,56 +65,69 @@ nsapi_error_t SIM5320CellularNetwork::activate_context()
 
     _at.lock();
 
-    // configure context
+    // configure context 1
+    _cid = DEFAULT_PDP_CONTEXT_NO;
+    _new_context_set = false;
+
     _at.cmd_start("AT+CGDCONT=");
-    _at.write_int(DEFAULT_PDP_CONTEXT_NO);
+    _at.write_int(_cid);
     _at.write_string(stack_type);
     _at.write_string(_apn);
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
     _at.cmd_start("AT+CGSOCKCONT=");
-    _at.write_int(DEFAULT_PDP_CONTEXT_NO);
+    _at.write_int(_cid);
     _at.write_string(stack_type);
     _at.write_string(_apn);
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
-    nsapi_error_t err = _at.unlock_return_error();
+    err = _at.get_last_error();
     if (err) {
-        return NSAPI_ERROR_NO_CONNECTION;
+        return _at.unlock_return_error();
     }
-
-    // run other activation code
-    err = AT_CellularNetwork::activate_context();
-    if (err) {
-        _at.unlock();
-        return NSAPI_ERROR_NO_CONNECTION;
+    // set user credentials
+    err = do_user_authentication();
+    if (err != NSAPI_ERROR_OK) {
+        return _at.unlock_return_error();
+    }
+    // activate context
+    _at.set_at_timeout(CONTEXT_ACTIVATION_TIMEOUT);
+    _at.cmd_start("AT+CGACT=1,");
+    _at.write_int(_cid);
+    _at.cmd_stop();
+    _at.resp_start();
+    _at.resp_stop();
+    _at.restore_at_timeout();
+    if (!_at.get_last_error()) {
+        _is_context_active = true;
     }
 
     // set active context as default for sockets
     _at.cmd_start("AT+CSOCKSETPN=");
     _at.write_int(_cid);
     _at.cmd_stop();
+    _at.set_at_timeout(CONTEXT_ACTIVATION_TIMEOUT);
     _at.resp_start();
     _at.resp_stop();
+    _at.restore_at_timeout();
     return _at.unlock_return_error();
 }
 
 #define NET_OPEN_CLOSE_TIMEOUT 30000
 #define NET_OPEN_CLOSE_CHECK_DELAY 5000
 
-nsapi_error_t SIM5320CellularNetwork::wait_network_status(int expected_status, int timeout)
+nsapi_error_t SIM5320CellularNetwork::_wait_network_status(int expected_status, int timeout)
 {
     Timer timer;
     int status = -1;
-    nsapi_error_t err = NSAPI_ERROR_OK;
+    nsapi_error_t err = _at.get_last_error();
+    if (err) {
+        return err;
+    }
 
     timer.start();
-    _at.lock();
-    if (_at.get_last_error()) {
-        return _at.unlock_return_error();
-    }
 
     while (1) {
         _at.clear_error();
@@ -130,19 +145,34 @@ nsapi_error_t SIM5320CellularNetwork::wait_network_status(int expected_status, i
         }
         wait_ms(NET_OPEN_CLOSE_CHECK_DELAY);
     }
-    _at.unlock();
     return err;
 }
 
 nsapi_error_t SIM5320CellularNetwork::connect()
 {
-    _at.lock();
-    nsapi_error_t err = AT_CellularNetwork::connect();
-    if (err) {
-        return _at.unlock_return_error();
+    nsapi_error_t err_1, err_2;
+    err_1 = AT_CellularNetwork::connect();
+    if (err_1) {
+        return err_1;
     }
+    _at.lock();
+    // don't show prompt with remove IP when new data is received
+    _at.cmd_start("AT+CIPSRIP=0");
+    _at.cmd_stop();
+    _at.resp_start();
+    _at.resp_stop();
     // set command mode (non-transparent mode)
     _at.cmd_start("AT+CIPMODE=0");
+    _at.cmd_stop();
+    _at.resp_start();
+    _at.resp_stop();
+    // set manual data receive mode
+    _at.cmd_start("AT+CIPRXGET=1");
+    _at.cmd_stop();
+    _at.resp_start();
+    _at.resp_stop();
+    // configure receive urc: "+RECEIVE"
+    _at.cmd_start("AT+CIPCCFG=,,,,1");
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
@@ -151,23 +181,36 @@ nsapi_error_t SIM5320CellularNetwork::connect()
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
-    err = wait_network_status(1, NET_OPEN_CLOSE_TIMEOUT);
-    return any_error(err, _at.unlock_return_error());
+    _at.set_at_timeout(NET_OPEN_CLOSE_TIMEOUT);
+    _at.resp_start("+NETOPEN:");
+    int open_code = _at.read_int();
+    _at.consume_to_stop_tag();
+    _at.restore_at_timeout();
+
+    err_1 = _at.get_last_error();
+    err_2 = open_code != 0 ? NSAPI_ERROR_NO_CONNECTION : NSAPI_ERROR_OK;
+    _at.unlock();
+    return any_error(err_1, err_2);
 }
 
 nsapi_error_t SIM5320CellularNetwork::disconnect()
 {
-    nsapi_error_t err_1, err_2;
+    nsapi_error_t err;
     _at.lock();
     // deactivate stack
     _at.cmd_start("AT+NETCLOSE");
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
-    err_1 = wait_network_status(0, NET_OPEN_CLOSE_TIMEOUT);
-    err_2 = AT_CellularNetwork::disconnect();
-    _at.unlock();
-    return any_error(err_1, err_2);
+    _at.set_at_timeout(NET_OPEN_CLOSE_TIMEOUT);
+    _at.resp_start("+NETCLOSE:");
+    int close_code = _at.read_int();
+    _at.consume_to_stop_tag();
+    _at.restore_at_timeout();
+    err = _at.unlock_return_error();
+    err = any_error(err, close_code == 0 ? NSAPI_ERROR_OK : NSAPI_ERROR_DEVICE_ERROR);
+    err = any_error(err, AT_CellularNetwork::disconnect());
+    return err;
 }
 
 static const CellularNetwork::RadioAccessTechnology RAT_TYPE_CNSMOD_CODE_MAP[] = {

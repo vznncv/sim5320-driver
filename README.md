@@ -2,7 +2,7 @@
 
 The library contains an SIM5320 driver for mbed-os.
 
-![](images/board.jpg)
+![SIM5320 board](images/board.jpg)
 
 The SIM5320 documentation can be found here:
 
@@ -14,6 +14,9 @@ The library allows:
 
 - get GPS coordinates and current UTC time
 - send SMS
+- resolve host names
+- establish tcp connections
+- upload files to FTP/FTPS servers
 
 ## Driver usage
 
@@ -43,6 +46,6 @@ you can reset device to factory settings, using the following steps:
 
 ## TODO:
 
-- add functions to use TCP and UDP connection
-- add mbed-os network stack compatable interface
-- add FTP client functionality
+- add functions to use UDP connection
+- fix SMS functionality to process long messages
+- add directory listing and file downloading for FTP client

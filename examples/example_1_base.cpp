@@ -84,7 +84,7 @@ int main()
     // create driver
     SIM5320 sim5320(PB_10, PB_11, PB_14, PB_13);
     // start hardware flow control (optionally)
-    check_ret_code(sim5320.start_uart_hw_flow_ctrl(), "configure flow control");
+    // check_ret_code(sim5320.start_uart_hw_flow_ctrl(), "configure flow control");
     // reset device (we do it explicitly, as it isn't reseted along with microcontroller)
     check_ret_code(sim5320.reset(), "device resetting");
     // perform basic driver initialization
@@ -144,7 +144,7 @@ int main()
     printf("Operator format: %d\n", format);
     printf("Operator name: \"%s\"\n", cell_operator.op_long);
     network->get_access_technology(rat);
-    printf("Access technology name: \"%s\"\n", NETWORK_REG_STATUS_NAMES_MAP[rat]);
+    printf("Access technology name: \"%s\"\n", NETWORK_RAT_NAMES_MAP[rat]);
 
     print_separator();
     printf("Stop device ...\n");

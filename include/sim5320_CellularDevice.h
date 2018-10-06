@@ -25,6 +25,8 @@ public:
     // Note: the EasyCellular isn't used as it has hard coded configuration
     friend SIM5320;
 
+    nsapi_error_t init_module(FileHandle* fh);
+
     virtual SIM5320GPSDevice* open_gps(FileHandle* fh);
     virtual void close_gps();
     virtual SIM5320FTPClient* open_ftp_client(FileHandle* fh);
@@ -34,10 +36,12 @@ protected:
     virtual AT_CellularPower* open_power_impl(ATHandler& at);
     virtual AT_CellularInformation* open_information_impl(ATHandler& at);
     virtual AT_CellularNetwork* open_network_impl(ATHandler& at);
+    virtual AT_CellularSMS* open_sms_impl(ATHandler& at);
 
     virtual SIM5320GPSDevice* open_gps_impl(ATHandler& at);
     virtual SIM5320FTPClient* open_ftp_client_impl(ATHandler& at);
 
+protected:
     SIM5320GPSDevice* _gps;
     int _gps_ref_count;
     SIM5320FTPClient* _ftp_client;

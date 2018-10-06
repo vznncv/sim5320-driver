@@ -7,7 +7,7 @@ namespace sim5320 {
 class SIM5320CellularNetwork : public AT_CellularNetwork, private NonCopyable<SIM5320CellularNetwork> {
 
 public:
-    SIM5320CellularNetwork(ATHandler& atHandler);
+    SIM5320CellularNetwork(ATHandler& at_handler);
     virtual ~SIM5320CellularNetwork();
 
 public: // CellularNetwork
@@ -16,7 +16,7 @@ public: // CellularNetwork
     virtual nsapi_error_t activate_context();
 
 private:
-    nsapi_error_t wait_network_status(int expected_status, int timeout);
+    nsapi_error_t _wait_network_status(int expected_status, int timeout);
 
 public:
     virtual nsapi_error_t connect();

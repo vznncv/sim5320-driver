@@ -143,11 +143,11 @@ nsapi_error_t SIM5320GPSDevice::get_desired_accuracy(int& value)
 nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevice::gps_coord_t& coord)
 {
     char lat_str[16];
-    char lat_dir_str[2];
+    char lat_dir_str[4];
     char log_str[16];
-    char log_dir_str[2];
-    char date_str[7];
-    char utc_time_str[9];
+    char log_dir_str[4];
+    char date_str[8];
+    char utc_time_str[10];
     char alt_str[10];
 
     _at.lock();
@@ -158,13 +158,12 @@ nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevic
     // read response
     // example 1: 3113.343286,N,12121.234064,E,250311,072809.3,44.1,0.0,0
     // example 1: ,,,,,,,,
-    _at.read_int();
     _at.read_string(lat_str, 16);
-    _at.read_string(lat_dir_str, 2);
+    _at.read_string(lat_dir_str, 4);
     _at.read_string(log_str, 16);
-    _at.read_string(log_dir_str, 2);
-    _at.read_string(date_str, 7);
-    _at.read_string(utc_time_str, 9);
+    _at.read_string(log_dir_str, 4);
+    _at.read_string(date_str, 8);
+    _at.read_string(utc_time_str, 10);
     _at.read_string(alt_str, 10);
     // ignore speed and course
     _at.skip_param(2);
@@ -180,13 +179,13 @@ nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevic
         has_coordinates = true;
         // parse coordinates
         float lat = strtof(lat_str, NULL);
-        lat *= 100;
+        lat /= 100;
         lat = (int)lat + (lat - (int)lat) * (5.0f / 3.0f);
         if (lat_dir_str[0] == 'S') {
             lat = -lat;
         }
         float log = strtof(log_str, NULL);
-        log *= 100;
+        log /= 100;
         log = (int)log + (log - (int)log) * (5.0f / 3.0f);
         if (log_dir_str[0] == 'W') {
             log = -log;
@@ -201,7 +200,7 @@ nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevic
         gps_tm.tm_year += 100;
         gps_tm.tm_mon -= 1;
         // fill result
-        coord.latitude = alt;
+        coord.latitude = lat;
         coord.longitude = log;
         coord.altitude = alt;
         coord.time = mktime(&gps_tm);

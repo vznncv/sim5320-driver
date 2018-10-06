@@ -1,5 +1,6 @@
 #ifndef SIM5320_UTILS_H
 #define SIM5320_UTILS_H
+#include "CellularLog.h"
 #include "mbed.h"
 namespace sim5320 {
 /**

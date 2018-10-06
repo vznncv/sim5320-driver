@@ -2,9 +2,10 @@
 #include "sim5320_CellularInformation.h"
 #include "sim5320_CellularNetwork.h"
 #include "sim5320_CellularPower.h"
+#include "sim5320_CellularSMS.h"
 using namespace sim5320;
 
-#define SIM5320_DEFAULT_TIMEOUT 4000
+#define SIM5320_DEFAULT_TIMEOUT 8000
 
 SIM5320CellularDevice::SIM5320CellularDevice(events::EventQueue& queue)
     : AT_CellularDevice(queue)
@@ -18,6 +19,24 @@ SIM5320CellularDevice::SIM5320CellularDevice(events::EventQueue& queue)
 
 SIM5320CellularDevice::~SIM5320CellularDevice()
 {
+}
+
+nsapi_error_t SIM5320CellularDevice::init_module(FileHandle* fh)
+{
+    nsapi_error_t err = AT_CellularDevice::init_module(fh);
+    if (err) {
+        return err;
+    }
+
+    ATHandler* _at_ptr = get_at_handler(fh);
+    _at_ptr->lock();
+    _at_ptr->cmd_start("AT+STK=0");
+    _at_ptr->cmd_stop();
+    _at_ptr->resp_start();
+    _at_ptr->resp_stop();
+    err = _at_ptr->unlock_return_error();
+    release_at_handler(_at_ptr);
+    return err;
 }
 
 SIM5320GPSDevice* SIM5320CellularDevice::open_gps(FileHandle* fh)
@@ -87,6 +106,11 @@ AT_CellularInformation* SIM5320CellularDevice::open_information_impl(ATHandler& 
 AT_CellularNetwork* SIM5320CellularDevice::open_network_impl(ATHandler& at)
 {
     return new SIM5320CellularNetwork(at);
+}
+
+AT_CellularSMS* SIM5320CellularDevice::open_sms_impl(ATHandler& at)
+{
+    return new SIM5320CellularSMS(at);
 }
 
 SIM5320GPSDevice* SIM5320CellularDevice::open_gps_impl(ATHandler& at)

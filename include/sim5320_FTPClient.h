@@ -12,10 +12,46 @@ public:
     virtual ~SIM5320FTPClient();
 
 private:
-    /*
-     * Helper function to read FTP command result code
+    /**
+     * Process ftp response like:
+     *
+     * @code
+     * OK
+     *
+     * +FTPSCMD: <x>
+     * @endcode
+     *
+     * @code
+     * ERROR
+     * @endcode
+     *
+     * @param command_name
+     * @return
      */
-    nsapi_error_t _read_ftp_ret_code(const char* command_name, bool path_timeout = true);
+    nsapi_error_t _process_ftp_ret_code(const char* command_name);
+
+    /**
+     * The same at ATHandler::lock but also clear any ftp errors and set ftp operation timeout.
+     */
+    void _lock();
+    void _unlock();
+
+    nsapi_error_t _last_ftp_error;
+    int8_t _lock_count;
+
+    nsapi_error_t _unlock_return_error();
+    nsapi_error_t _get_last_error();
+    nsapi_error_t _get_last_ftp_error();
+
+    void _clear_error(bool at_error = true, bool ftp_error = true);
+    void _set_ftp_error_code(int err_code);
+
+    void _read_ftp_code();
+
+    // helper buffer for different purposes
+    nsapi_error_t _init_buffer();
+    static const size_t _STR_BUF_SIZE = 256;
+    char* _str_buf;
 
 public:
     // ftp API
@@ -28,6 +64,7 @@ public:
     };
 
     enum FTPErrorCode {
+        FTP_ERROR_RESPONSE_CODE = 4000, // invalid response code
         FTP_ERROR_SSL = -4001,
         FTP_ERROR_UNKNONW = -4002,
         FTP_ERROR_BUSY = -4003,
@@ -37,7 +74,8 @@ public:
         FTP_ERROR_MEMORY = -4007,
         FTP_ERROR_INVALID_PARAMTER = -4008,
         FTP_ERROR_OPERATION_REJECTED_BY_SERVER = -4009,
-        FTP_ERROR_NETWROK_ERROR = -4010
+        FTP_ERROR_NETWROK_ERROR = -4010,
+        FTP_ERROR_DRIVER_MEMORY = -4011 // error memory allocation for driver
     };
 
     /**
@@ -59,7 +97,7 @@ public:
     * @param max_size size of the workdir buffer.
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t get_cwd(char work_dir, size_t max_size);
+    nsapi_error_t get_cwd(char* work_dir, size_t max_size);
 
     /**
     * Set current working directory.
@@ -69,17 +107,15 @@ public:
     */
     nsapi_error_t set_cwd(const char* work_dir);
 
+    // TODO: add method to list files in the directory
+
     /**
-    * List files in the specified directory.
-    *
-    * For each filename the @p name_callback will be invoked with `filename`.
-    * To get full filepath you should concatenate @p path and `filename`.
-    *
-    * @param path directory path
-    * @param name_callback callback
-    * @return 0 on success, non-zero on failure
-    */
-    nsapi_error_t list_dir(const char* path, Callback<void(const char*)> name_callback);
+     * Get file size in bytes.
+     *
+     * @param size file size or negative value if file doesn't exists
+     * @return
+     */
+    nsapi_error_t get_file_size(const char* path, long& size);
 
     /**
     * Check if file exists on a ftp server.
@@ -88,6 +124,24 @@ public:
     * @param result true if file exists, otherwise false
     * @return 0 on success, non-zero on failure
     */
+    nsapi_error_t isfile(const char* path, bool& result);
+
+    /**
+     * Check if given path is directory.
+     *
+     * @param path directory path
+     * @param result true if directory exists, otherwise false
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t isdir(const char* path, bool& result);
+
+    /**
+     * Check if file or directory exists.
+     *
+     * @param path file or directory path
+     * @param result rue if path exists, otherwise false
+     * @return 0 on success, non-zero on failure
+     */
     nsapi_error_t exists(const char* path, bool& result);
 
     /**
@@ -121,11 +175,15 @@ public:
     * that it can accept. The callback should return actual amount of data that it put into `data`.
     * If returned value is `0`, then transmission will be finished.
     *
+    * @note
+    * This operation can be long and lock ATHandler object, so you cannot use other sim5320 functionality
+    * till end of this operation.
+    *
     * @param path ftp file path
-    * @param data_reader callback to provide data
+    * @param data_writer callback to provide data
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t put(const char* path, Callback<ssize_t(uint8_t* data, ssize_t size)> data_reader);
+    nsapi_error_t put(const char* path, Callback<ssize_t(uint8_t* data, size_t size)> data_writer);
 
     /**
     * Get file from ftp server.
@@ -134,16 +192,16 @@ public:
     * and returns amount of the data that has been processed.
     *
     * @param path ftp file path
-    * @param data_writer callback
+    * @param data_reader callback
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t get(const char* path, Callback<ssize_t(uint8_t* data, ssize_t size)> data_writer);
+    nsapi_error_t get(const char* path, Callback<ssize_t(uint8_t* data, size_t size)> data_reader);
 
     /**
     * @brief ftp_close
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t close();
+    nsapi_error_t disconnect();
 };
 }
 

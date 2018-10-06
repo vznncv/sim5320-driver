@@ -1,36 +1,37 @@
-#include "sim5320_CellularStack.h"
+﻿#include "sim5320_CellularStack.h"
+#include "sim5320_utils.h"
 using namespace sim5320;
 
 SIM5320CellularStack::SIM5320CellularStack(ATHandler& at, int cid, nsapi_ip_stack_t stack_type)
     : AT_CellularStack(at, cid, stack_type)
+    , _active_sockets(0)
 {
-    _at.set_urc_handler("+CCHEVENT:", callback(this, &SIM5320CellularStack::urc_cchevent));
-    _at.set_urc_handler("+CCH_PEER_CLOSED:", callback(this, &SIM5320CellularStack::urc_cch_peer_closed));
-    _at.set_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::urc_cipevent));
-    _at.set_urc_handler("+IPCLOSE:", callback(this, &SIM5320CellularStack::urc_ipclose));
+    _at.set_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::_urc_cipevent));
+    _at.set_urc_handler("+IPCLOSE:", callback(this, &SIM5320CellularStack::_urc_ipclose));
+    _at.set_urc_handler("+RECEIVE,", callback(this, &SIM5320CellularStack::_urc_receive));
+    _at.set_urc_handler("+IP ERROR: No data", callback(this, &SIM5320CellularStack::_urc_ciprxget_no_data));
 }
 
 SIM5320CellularStack::~SIM5320CellularStack()
 {
-    _at.remove_urc_handler("+CCHEVENT:", callback(this, &SIM5320CellularStack::urc_cchevent));
-    _at.remove_urc_handler("+CCH_PEER_CLOSED:", callback(this, &SIM5320CellularStack::urc_cch_peer_closed));
-    _at.remove_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::urc_cipevent));
-    _at.remove_urc_handler("+IPCLOSE:", callback(this, &SIM5320CellularStack::urc_ipclose));
+    _at.remove_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::_urc_cipevent));
+    _at.remove_urc_handler("+IPCLOSE:", callback(this, &SIM5320CellularStack::_urc_ipclose));
+    _at.remove_urc_handler("+RECEIVE,", callback(this, &SIM5320CellularStack::_urc_receive));
+    _at.remove_urc_handler("+IP ERROR: No data", callback(this, &SIM5320CellularStack::_urc_ciprxget_no_data));
 }
 
-#define DNS_QUERY_TIMEOUT 30000
+#define DNS_QUERY_TIMEOUT 12000
 
 nsapi_error_t SIM5320CellularStack::gethostbyname(const char* host, SocketAddress* address, nsapi_version_t version)
 {
     char ip_address[NSAPI_IP_SIZE];
     nsapi_error_t err = NSAPI_ERROR_NO_CONNECTION;
 
-    _at.lock();
     if (address->set_ip_address(host)) {
         // the host is ip address, so skip
         err = NSAPI_ERROR_OK;
     } else {
-        // This interrogation can sometimes take longer than the usual 8 seconds
+        _at.lock();
         _at.cmd_start("AT+CDNSGIP=");
         _at.write_string(host);
         _at.cmd_stop();
@@ -46,11 +47,14 @@ nsapi_error_t SIM5320CellularStack::gethostbyname(const char* host, SocketAddres
             if (address->set_ip_address(ip_address)) {
                 err = NSAPI_ERROR_OK;
             }
+        } else {
+            err = NSAPI_ERROR_DNS_FAILURE;
         }
         _at.resp_stop();
         _at.restore_at_timeout();
+
+        err = any_error(err, _at.unlock_return_error());
     }
-    _at.unlock();
 
     return err;
 }
@@ -77,26 +81,29 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
 {
     int open_code = -1;
     // use socket index as socket id
-    int socket_id = -1;
+    int sock_id = -1;
     for (int i = 0; i < get_max_socket_count(); i++) {
         if (_socket[i] == socket) {
-            socket_id = i;
+            sock_id = i;
             break;
         }
     }
-    if (socket_id < 0) {
+    if (sock_id < 0) {
+        tr_debug("socket.create: cannot resolve socket id");
         return NSAPI_ERROR_NO_SOCKET;
     }
     // ignore socket creation, if remote address isn't set
     if (!socket->remoteAddress) {
+        tr_debug("socket.create, sock_id %d: emote address isn't set", sock_id);
         return NSAPI_ERROR_NO_SOCKET;
     }
 
-    socket->id = socket_id;
+    socket->id = sock_id;
     _at.lock();
+    tr_debug("socket.create, sock_id %d: create ...", sock_id);
     if (socket->proto == NSAPI_TCP) {
         _at.cmd_start("AT+CIPOPEN=");
-        _at.write_int(socket_id);
+        _at.write_int(sock_id);
         _at.write_string("TCP");
         _at.write_string(socket->remoteAddress.get_ip_address());
         _at.write_int(socket->remoteAddress.get_port());
@@ -106,22 +113,24 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
         _at.resp_stop();
         // wait connection confirmation
         _at.set_at_timeout(TCP_OPEN_TIMEOUT);
-        _at.resp_start("+CIPOPEN:", true);
-        _at.skip_param();
-        open_code = _at.read_int();
+        _at.resp_start("+CIPOPEN:");
         _at.restore_at_timeout();
+        int link_num = _at.read_int();
+        open_code = _at.read_int();
+        _at.consume_to_stop_tag();
     } // unsupported protocol is checked in "is_protocol_supported" function
     nsapi_error_t err = _at.unlock_return_error();
 
-    printf("socket creation error code %d\n", err);
-    printf("socket creation open code %d\n", open_code);
     if (err || open_code != 0) {
+        tr_debug("socket.create, sock_id %d: fail to create, err = %d, open_code = %d", sock_id, err, open_code);
         return NSAPI_ERROR_NO_SOCKET;
     }
-
-    printf("finish socket creation\n");
+    tr_debug("socket.create, sock_id %d: created", sock_id);
 
     socket->created = true;
+    socket->started = true;
+    socket->pending_bytes = 0;
+    _active_sockets |= 0x0001 << sock_id;
     return NSAPI_ERROR_OK;
 }
 
@@ -133,141 +142,247 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
+    if (!(_active_sockets & 0x0001 << sock_id)) {
+        // ignore error if we tried to close the closed socket
+        _at.clear_error();
+    }
+    // mark socket as closed
+    _active_sockets &= ~(0x0001 << sock_id);
+    tr_debug("socket.create, sock_id %d: closed (err %d)", sock_id, _at.get_last_error());
     return _at.unlock_return_error();
 }
 
+#define MAX_WRITE_BLOCK_SIZE 230
+
 nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack::CellularSocket* socket, const SocketAddress& address, const void* data, nsapi_size_t size)
 {
-    printf("inside socket_sendto_impl\n");
+    int sock_id = socket->id;
+    tr_debug("socket.send, sock_id %d: send data ...", sock_id);
     if (size == 0) {
+        tr_debug("socket.send, sock_id %d: no data to send", sock_id);
         return 0;
     }
+    // if socket is closed, then return error
+    if (!(_active_sockets & 0x0001 << sock_id)) {
+        tr_debug("socket.send, sock_id %d: socket has been closed", sock_id);
+        return NSAPI_ERROR_CONNECTION_LOST;
+    }
+
+    if (size > MAX_WRITE_BLOCK_SIZE) {
+        size = MAX_WRITE_BLOCK_SIZE;
+    }
+
     if (socket->proto == NSAPI_TCP) {
         _at.lock();
         _at.cmd_start("AT+CIPSEND=");
         _at.write_int(socket->id);
         _at.write_int(size);
         _at.cmd_stop();
-        printf("write data\n");
-        wait_ms(5000);
-        _at.write_bytes((const uint8_t*)data, size);
-        _at.resp_start();
 
-        _at.resp_start("+CIPSEND:", true);
+        _at.resp_start(">", true);
+        _at.write_bytes((const uint8_t*)data, size);
+
+        // read actual amount of the data that has been send
+        _at.resp_start();
+        _at.resp_stop();
+        _at.resp_start("+CIPSEND:");
         int link_num = _at.read_int();
         int req_send_length = _at.read_int();
         int cnf_send_length = _at.read_int();
-        nsapi_error_t err = _at.get_last_error();
-        _at.unlock();
+        _at.consume_to_stop_tag();
+        nsapi_error_t err = _at.unlock_return_error();
+
         if (err) {
+            tr_debug("socket.send, sock_id %d: fail to parse response", sock_id);
             return err;
         }
-        if (cnf_send_length <= 0 || req_send_length != cnf_send_length) {
+        if (cnf_send_length < 0 || req_send_length != cnf_send_length) {
             // error, close socket
-            socket->connected = false;
-            socket->_cb(socket->_data);
+            _active_sockets &= ~(0x0001 << sock_id);
+            tr_debug("socket.send, sock_id %d: error, close socket", sock_id);
             return NSAPI_ERROR_CONNECTION_LOST;
         }
-        return req_send_length;
+
+        if (req_send_length == 0) {
+            tr_debug("socket.send, sock_id %d: socket is blocked", sock_id);
+            return NSAPI_ERROR_WOULD_BLOCK;
+        } else {
+            tr_debug("socket.send, sock_id %d: % bytes have been sent", req_send_length);
+            return req_send_length;
+        }
     } else {
+        tr_debug("socket.send, sock_id %d: invalid protocol", sock_id);
         return NSAPI_ERROR_UNSUPPORTED;
     }
 }
 
+#define MAX_READ_BLOCK_SIZE 230
+
 nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStack::CellularSocket* socket, SocketAddress* address, void* buffer, nsapi_size_t size)
 {
-    printf("== inside socket_recvfrom_impl\n");
     nsapi_error_t err;
+    int mode;
+    int link_id;
+    int read_len;
+    int rest_len;
+
+    int sock_id = socket->id;
+    tr_debug("socket.recv, sock_id %d: receive data ...", sock_id);
+
     if (size == 0) {
+        tr_debug("socket.recv, sock_id %d: nothing to send", sock_id);
         return 0;
     }
-    // limit size (it's probably should be limited by serial buffer size)
-    if (size > 1500) {
-        size = 1500;
-    }
-    if (socket->proto == NSAPI_TCP) {
 
+    // limit size (it's probably should be limited by serial buffer size)
+    if (size > MAX_READ_BLOCK_SIZE) {
+        size = MAX_READ_BLOCK_SIZE;
+    }
+    _at.process_oob();
+
+    if (socket->pending_bytes == 0) {
+        if (!(_active_sockets & 0x0001 << sock_id)) {
+            // socket is closed and there are nothing to read
+            tr_debug("socket.recv, sock_id %d: socket has been closed", sock_id);
+            return 0;
+        } else {
+            tr_debug("socket.recv, sock_id %d: no data to read", sock_id);
+            return NSAPI_ERROR_WOULD_BLOCK;
+        }
+    }
+
+    if (socket->proto == NSAPI_TCP) {
         _at.lock();
-        _at.cmd_start("+CIPRXGET=");
+        // read data to free input buffer for data
+        _at.cmd_start("AT+CIPRXGET=");
         _at.write_int(2); // read mode
         _at.write_int(socket->id); // socket id
         _at.write_int(size); // block to read
         _at.cmd_stop();
 
-        _at.resp_start();
-        _at.resp_stop();
+        _ciprxget_no_data = false;
+        while (true) {
+            _at.resp_start("+CIPRXGET:");
+            mode = _at.read_int();
+            if (mode < 2) {
+                // note: we can get messages like
+                // +CIPRXGET: 1,<link_id>, but we should ignore them
+                _at.consume_to_stop_tag();
+            } else {
+                // we got message like this:
+                // +CIPRXGET: <mode_2_or_3>,<link_id>,<read_len>,<rest_len>
+                link_id = _at.read_int();
+                read_len = _at.read_int();
+                rest_len = _at.read_int();
+                break;
+            }
+            if (_at.get_last_error()) {
+                break;
+            }
+        }
 
-        _at.resp_start("+CIPRXGET:");
-        int mode = _at.read_int();
-        int socket_id = _at.read_int();
-        int read_len = _at.read_int();
-        int rest_len = _at.read_int();
-        // read NEWLINE
-        uint8_t crnf_buff[2];
-        _at.read_bytes(crnf_buff, 2);
-        // read data
-        _at.read_bytes((uint8_t*)buffer, size);
-        _at.cmd_stop();
+        _at.read_bytes((uint8_t*)buffer, read_len);
+        _at.resp_stop();
+        if (_ciprxget_no_data) {
+            _at.clear_error();
+        }
         err = _at.unlock_return_error();
+        if (!err) {
+            socket->pending_bytes -= read_len;
+        }
 
         if (err) {
+            tr_debug("socket.recv, sock_id %d: fail CIPRXGET command response", err);
             return err;
         }
-        return read_len;
+
+        if (read_len == 0 || _ciprxget_no_data) {
+            tr_debug("socket.recv, sock_id %d: no data to read", sock_id);
+            return NSAPI_ERROR_WOULD_BLOCK;
+        } else {
+            tr_debug("socket.recv, sock_id %d: %d bytes has been read", sock_id, read_len);
+            return read_len;
+        }
     } else {
+        tr_debug("socket.recv, sock_id %d: invalid protocol", sock_id);
         return NSAPI_ERROR_UNSUPPORTED;
     }
 }
 
-void SIM5320CellularStack::notify_socket(int socket_id)
+AT_CellularStack::CellularSocket* SIM5320CellularStack::_get_socket(int link_id)
 {
-    if (socket_id >= 0 && socket_id < get_max_socket_count()) {
-        CellularSocket* socket = _socket[socket_id];
-        if (socket && socket->_cb) {
-            socket->_cb(socket->_data);
-        }
+    if (link_id >= 0 && link_id < get_max_socket_count()) {
+        CellularSocket* socket = _socket[link_id];
+        return socket;
+    }
+    return NULL;
+}
+
+void SIM5320CellularStack::_notify_socket(int link_id)
+{
+    _notify_socket(_get_socket(link_id));
+}
+
+void SIM5320CellularStack::_notify_socket(AT_CellularStack::CellularSocket* socket)
+{
+    if (socket && socket->_cb) {
+        socket->_cb(socket->_data);
     }
 }
 
-void SIM5320CellularStack::disconnect_socket(int socket_id)
+void SIM5320CellularStack::_disconnect_socket(int link_id)
 {
-    if (socket_id >= 0 && socket_id < get_max_socket_count()) {
-        CellularSocket* socket = _socket[socket_id];
-        if (socket) {
-            socket->connected = false;
-            if (socket->_cb) {
-                socket->_cb(socket->_data);
-            }
-        }
+    _disconnect_socket(_get_socket(link_id));
+}
+
+void SIM5320CellularStack::_disconnect_socket(AT_CellularStack::CellularSocket* socket)
+{
+    if (!socket) {
+        return;
+    }
+
+    // mark socket as closed
+    _active_sockets &= ~(0x0001 << socket->id);
+
+    if (socket->_cb) {
+        socket->_cb(socket->_data);
     }
 }
 
-void SIM5320CellularStack::urc_cchevent()
+void SIM5320CellularStack::_urc_cipevent()
 {
-    int socket_id = _at.read_int();
-    // new data is received
-    notify_socket(socket_id);
-}
-
-void SIM5320CellularStack::urc_cch_peer_closed()
-{
-    int socket_id = _at.read_int();
-    // socket is closed by peer
-    disconnect_socket(socket_id);
-}
-
-void SIM5320CellularStack::urc_cipevent()
-{
+    _at.consume_to_stop_tag();
     // close all connection
     // TODO: find what should be done
     for (int i = 0; i < get_max_socket_count(); i++) {
-        disconnect_socket(i);
+        _disconnect_socket(i);
     }
 }
 
-void SIM5320CellularStack::urc_ipclose()
+void SIM5320CellularStack::_urc_ipclose()
 {
-    int socket_id = _at.read_int();
+    _at.consume_to_stop_tag();
+    int link_id = _at.read_int();
     // socket is closed by peer
-    disconnect_socket(socket_id);
+    _disconnect_socket(link_id);
+}
+
+void SIM5320CellularStack::_urc_receive()
+{
+    int link_id = _at.read_int();
+    int num_bytes = _at.read_int();
+
+    CellularSocket* socket = _get_socket(link_id);
+    if (!socket) {
+        return;
+    }
+    // count pending bytes
+    socket->pending_bytes += num_bytes;
+    // notify socket
+    _notify_socket(socket);
+}
+
+void SIM5320CellularStack::_urc_ciprxget_no_data()
+{
+    _ciprxget_no_data = true;
 }

@@ -4,6 +4,9 @@
 #include "mbed.h"
 #include "sim5320_CellularDevice.h"
 #include "sim5320_GPSDevice.h"
+#ifdef MBED_CONF_MBED_TRACE_ENABLE
+#include "mbed_trace.h"
+#endif
 
 namespace sim5320 {
 
@@ -16,8 +19,11 @@ public:
      * Constructor.
      *
      * @param serial_ptr Serial interface.
+     * @param rts RTS pin of the Serial interface
+     * @param cts CTS pin of the Serial interface
+     * @param rst hardware reset pin (will be used when reset command fails)
      */
-    SIM5320(UARTSerial* serial_ptr, PinName rts = NC, PinName cts = NC);
+    SIM5320(UARTSerial* serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
     /**
      * Constructor.
      *
@@ -25,8 +31,9 @@ public:
      * @param rx RX pin of the Serial interface
      * @param rts RTS pin of the Serial interface
      * @param cts CTS pin of the Serial interface
+     * @param rst hardware reset pin (will be used when reset command fails)
      */
-    SIM5320(PinName tx, PinName rx, PinName rts = NC, PinName cts = NC);
+    SIM5320(PinName tx, PinName rx, PinName rts = NC, PinName cts = NC, PinName rst = NC);
 
 private:
     /**
@@ -72,6 +79,18 @@ public:
      * @return 0 on success, non-zero on failure
      */
     nsapi_error_t reset();
+
+    /**
+     * Set all setting to factory values.
+     *
+     * After that module should be reset manually.
+     *
+     * @warning
+     * Don't use this method in the production systems
+     *
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t set_factory_settings();
 
     /**
      * Send requests to start module.
@@ -161,6 +180,9 @@ private:
     PinName _cts;
     UARTSerial* _serial_ptr;
     bool _cleanup_uart;
+
+    PinName _rst;
+    DigitalOut* _rst_out_ptr;
 
     SIM5320CellularDevice* _device;
     CellularPower* _power;

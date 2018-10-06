@@ -1,8 +1,8 @@
 #include "sim5320_CellularInformation.h"
 using namespace sim5320;
 
-SIM5320CellularInformation::SIM5320CellularInformation(ATHandler& atHandler)
-    : AT_CellularInformation(atHandler)
+SIM5320CellularInformation::SIM5320CellularInformation(ATHandler& at_handler)
+    : AT_CellularInformation(at_handler)
 {
 }
 
@@ -12,17 +12,17 @@ SIM5320CellularInformation::~SIM5320CellularInformation()
 
 nsapi_error_t SIM5320CellularInformation::get_manufacturer(char* buf, size_t buf_size)
 {
-    return get_simcom_info("AT+CGMI", NULL, buf, buf_size);
+    return _get_simcom_info("AT+CGMI", NULL, buf, buf_size);
 }
 
 nsapi_error_t SIM5320CellularInformation::get_model(char* buf, size_t buf_size)
 {
-    return get_simcom_info("AT+CGMM", NULL, buf, buf_size);
+    return _get_simcom_info("AT+CGMM", NULL, buf, buf_size);
 }
 
 nsapi_error_t SIM5320CellularInformation::get_revision(char* buf, size_t buf_size)
 {
-    return get_simcom_info("AT+CGMR", "+CGMR:", buf, buf_size);
+    return _get_simcom_info("AT+CGMR", "+CGMR:", buf, buf_size);
 }
 
 nsapi_error_t SIM5320CellularInformation::get_serial_number(char* buf, size_t buf_size, mbed::CellularInformation::SerialNumberType type)
@@ -30,7 +30,7 @@ nsapi_error_t SIM5320CellularInformation::get_serial_number(char* buf, size_t bu
     switch (type) {
     case mbed::CellularInformation::SN:
     case mbed::CellularInformation::IMEI:
-        return get_simcom_info("AT+CGSN", NULL, buf, buf_size);
+        return _get_simcom_info("AT+CGSN", NULL, buf, buf_size);
 
     case mbed::CellularInformation::IMEISV:
     case mbed::CellularInformation::SVN:
@@ -38,7 +38,7 @@ nsapi_error_t SIM5320CellularInformation::get_serial_number(char* buf, size_t bu
     }
 }
 
-nsapi_error_t SIM5320CellularInformation::get_simcom_info(const char* cmd, const char* response_prefix, char* buf, size_t buf_size)
+nsapi_error_t SIM5320CellularInformation::_get_simcom_info(const char* cmd, const char* response_prefix, char* buf, size_t buf_size)
 {
     _at.lock();
 
