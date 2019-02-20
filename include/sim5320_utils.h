@@ -20,5 +20,10 @@ static nsapi_error_t any_error(nsapi_error_t err_1, nsapi_error_t err_2)
     }
     return 0;
 }
+
+#define SIM5320_UNLOCK_RETURN_IF_ERROR(at_handler_ptr) \
+    if (at_handler_ptr->get_last_error()) {            \
+        return at_handler_ptr->unlock_return_error();  \
+    }
 }
 #endif // SIM5320_UTILS_H

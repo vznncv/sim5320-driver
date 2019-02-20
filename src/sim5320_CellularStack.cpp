@@ -2,7 +2,7 @@
 #include "sim5320_utils.h"
 using namespace sim5320;
 
-SIM5320CellularStack::SIM5320CellularStack(ATHandler& at, int cid, nsapi_ip_stack_t stack_type)
+SIM5320CellularStack::SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type)
     : AT_CellularStack(at, cid, stack_type)
     , _active_sockets(0)
 {
@@ -14,15 +14,15 @@ SIM5320CellularStack::SIM5320CellularStack(ATHandler& at, int cid, nsapi_ip_stac
 
 SIM5320CellularStack::~SIM5320CellularStack()
 {
-    _at.remove_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::_urc_cipevent));
-    _at.remove_urc_handler("+IPCLOSE:", callback(this, &SIM5320CellularStack::_urc_ipclose));
-    _at.remove_urc_handler("+RECEIVE,", callback(this, &SIM5320CellularStack::_urc_receive));
-    _at.remove_urc_handler("+IP ERROR: No data", callback(this, &SIM5320CellularStack::_urc_ciprxget_no_data));
+    _at.set_urc_handler("+CIPEVENT:", NULL);
+    _at.set_urc_handler("+IPCLOSE:", NULL);
+    _at.set_urc_handler("+RECEIVE,", NULL);
+    _at.set_urc_handler("+IP ERROR: No data", NULL);
 }
 
 #define DNS_QUERY_TIMEOUT 12000
 
-nsapi_error_t SIM5320CellularStack::gethostbyname(const char* host, SocketAddress* address, nsapi_version_t version)
+nsapi_error_t SIM5320CellularStack::gethostbyname(const char *host, SocketAddress *address, nsapi_version_t version, const char *interface_name)
 {
     char ip_address[NSAPI_IP_SIZE];
     nsapi_error_t err = NSAPI_ERROR_NO_CONNECTION;
@@ -40,7 +40,7 @@ nsapi_error_t SIM5320CellularStack::gethostbyname(const char* host, SocketAddres
         _at.resp_start("+CDNSGIP:");
         int ret_code = _at.read_int();
         if (ret_code == 1) {
-            // skip name
+            // skip PDP context id
             _at.skip_param();
             // read address
             _at.read_string(ip_address, NSAPI_IP_SIZE);
@@ -77,7 +77,7 @@ bool SIM5320CellularStack::is_protocol_supported(nsapi_protocol_t protocol)
 
 #define TCP_OPEN_TIMEOUT 30000
 
-nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::CellularSocket* socket)
+nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::CellularSocket *socket)
 {
     int open_code = -1;
     // use socket index as socket id
@@ -140,21 +140,24 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.cmd_start("AT+CIPCLOSE=");
     _at.write_int(sock_id);
     _at.cmd_stop();
-    _at.resp_start();
+    // get OK or ERROR (note: a URC code can appear before OK or ERROR)
+    _at.resp_start("OK");
     _at.resp_stop();
-    if (!(_active_sockets & 0x0001 << sock_id)) {
+
+    if (!(_active_sockets & (0x0001 << sock_id))) {
         // ignore error if we tried to close the closed socket
         _at.clear_error();
     }
     // mark socket as closed
     _active_sockets &= ~(0x0001 << sock_id);
-    tr_debug("socket.create, sock_id %d: closed (err %d)", sock_id, _at.get_last_error());
+    tr_debug("socket.close, sock_id %d: closed (err %d)", sock_id, _at.get_last_error());
+
     return _at.unlock_return_error();
 }
 
 #define MAX_WRITE_BLOCK_SIZE 230
 
-nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack::CellularSocket* socket, const SocketAddress& address, const void* data, nsapi_size_t size)
+nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack::CellularSocket *socket, const SocketAddress &address, const void *data, nsapi_size_t size)
 {
     int sock_id = socket->id;
     tr_debug("socket.send, sock_id %d: send data ...", sock_id);
@@ -180,7 +183,7 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack:
         _at.cmd_stop();
 
         _at.resp_start(">", true);
-        _at.write_bytes((const uint8_t*)data, size);
+        _at.write_bytes((const uint8_t *)data, size);
 
         // read actual amount of the data that has been send
         _at.resp_start();
@@ -218,7 +221,7 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack:
 
 #define MAX_READ_BLOCK_SIZE 230
 
-nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStack::CellularSocket* socket, SocketAddress* address, void* buffer, nsapi_size_t size)
+nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStack::CellularSocket *socket, SocketAddress *address, void *buffer, nsapi_size_t size)
 {
     nsapi_error_t err;
     int mode;
@@ -281,7 +284,7 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
             }
         }
 
-        _at.read_bytes((uint8_t*)buffer, read_len);
+        _at.read_bytes((uint8_t *)buffer, read_len);
         _at.resp_stop();
         if (_ciprxget_no_data) {
             _at.clear_error();
@@ -309,10 +312,10 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
     }
 }
 
-AT_CellularStack::CellularSocket* SIM5320CellularStack::_get_socket(int link_id)
+AT_CellularStack::CellularSocket *SIM5320CellularStack::_get_socket(int link_id)
 {
     if (link_id >= 0 && link_id < get_max_socket_count()) {
-        CellularSocket* socket = _socket[link_id];
+        CellularSocket *socket = _socket[link_id];
         return socket;
     }
     return NULL;
@@ -323,19 +326,19 @@ void SIM5320CellularStack::_notify_socket(int link_id)
     _notify_socket(_get_socket(link_id));
 }
 
-void SIM5320CellularStack::_notify_socket(AT_CellularStack::CellularSocket* socket)
+void SIM5320CellularStack::_notify_socket(AT_CellularStack::CellularSocket *socket)
 {
     if (socket && socket->_cb) {
         socket->_cb(socket->_data);
     }
 }
 
-void SIM5320CellularStack::_disconnect_socket(int link_id)
+void SIM5320CellularStack::_disconnect_socket_by_peer(int link_id)
 {
-    _disconnect_socket(_get_socket(link_id));
+    _disconnect_socket_by_peer(_get_socket(link_id));
 }
 
-void SIM5320CellularStack::_disconnect_socket(AT_CellularStack::CellularSocket* socket)
+void SIM5320CellularStack::_disconnect_socket_by_peer(AT_CellularStack::CellularSocket *socket)
 {
     if (!socket) {
         return;
@@ -355,16 +358,15 @@ void SIM5320CellularStack::_urc_cipevent()
     // close all connection
     // TODO: find what should be done
     for (int i = 0; i < get_max_socket_count(); i++) {
-        _disconnect_socket(i);
+        _disconnect_socket_by_peer(i);
     }
 }
 
 void SIM5320CellularStack::_urc_ipclose()
 {
-    _at.consume_to_stop_tag();
     int link_id = _at.read_int();
     // socket is closed by peer
-    _disconnect_socket(link_id);
+    _disconnect_socket_by_peer(link_id);
 }
 
 void SIM5320CellularStack::_urc_receive()
@@ -372,7 +374,7 @@ void SIM5320CellularStack::_urc_receive()
     int link_id = _at.read_int();
     int num_bytes = _at.read_int();
 
-    CellularSocket* socket = _get_socket(link_id);
+    CellularSocket *socket = _get_socket(link_id);
     if (!socket) {
         return;
     }

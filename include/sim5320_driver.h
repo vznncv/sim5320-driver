@@ -3,10 +3,8 @@
 
 #include "mbed.h"
 #include "sim5320_CellularDevice.h"
+#include "sim5320_FTPClient.h"
 #include "sim5320_GPSDevice.h"
-#ifdef MBED_CONF_MBED_TRACE_ENABLE
-#include "mbed_trace.h"
-#endif
 
 namespace sim5320 {
 
@@ -23,7 +21,7 @@ public:
      * @param cts CTS pin of the Serial interface
      * @param rst hardware reset pin (will be used when reset command fails)
      */
-    SIM5320(UARTSerial* serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
+    SIM5320(UARTSerial *serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
     /**
      * Constructor.
      *
@@ -71,16 +69,6 @@ public:
     nsapi_error_t init();
 
     /**
-     * Reset module.
-     *
-     * @note
-     * The function will wait till module startup. It can take several seconds.
-     *
-     * @return 0 on success, non-zero on failure
-     */
-    nsapi_error_t reset();
-
-    /**
      * Set all setting to factory values.
      *
      * After that module should be reset manually.
@@ -112,89 +100,108 @@ public:
      */
     nsapi_error_t request_to_stop();
 
+    enum ResetMode {
+        RESET_MODE_DEFAULT = 0,
+        RESET_MODE_SOFT = 1,
+        RESET_MODE_HARD = 2
+    };
+
     /**
-     * Wait till device is registered in the network
+     * Reset device.
      *
-     * @param timeout_ms maximal wait timeout
+     * @param reset_mode
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t wait_network_registration(int timeout_ms = 30000);
+    nsapi_error_t reset(ResetMode reset_mode = RESET_MODE_DEFAULT);
+
+    //    /**
+    //     * Wait till device is registered in the network
+    //     *
+    //     * @param timeout_ms maximal wait timeout
+    //     * @return 0 on success, non-zero on failure
+    //     */
+    //    nsapi_error_t wait_network_registration(int timeout_ms = 30000);
 
     /**
      * Check if module is run.
      *
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t is_active(bool& active);
+    nsapi_error_t is_active(bool &active);
 
     /**
-     * Get power interface.
+     * Get cellular device interface.
      *
      * @return
      */
-    CellularPower* get_power();
+    CellularDevice *get_device();
 
     /**
      * Get device information interface.
      *
      * @return
      */
-    CellularInformation* get_information();
+    CellularInformation *get_information();
 
     /**
      * Get network interface.
      *
      * @return
      */
-    CellularNetwork* get_network();
-    /**
-     * Get SIM interface.
-     *
-     * @return
-     */
-    CellularSIM* get_sim();
+    CellularNetwork *get_network();
 
     /**
      * Get sms interface.
      *
      * @return
      */
-    CellularSMS* get_sms();
+    CellularSMS *get_sms();
+
+    /**
+     * Get cellular context interface.
+     *
+     * @return
+     */
+    CellularContext *get_context();
 
     /**
      * Get gps interface.
      *
      * @return
      */
-    SIM5320GPSDevice* get_gps();
+    SIM5320GPSDevice *get_gps();
 
     /**
      * Get ftp client.
      *
      * @return
      */
-    SIM5320FTPClient* get_ftp_client();
+    SIM5320FTPClient *get_ftp_client();
 
 private:
     PinName _rts;
     PinName _cts;
-    UARTSerial* _serial_ptr;
+    UARTSerial *_serial_ptr;
     bool _cleanup_uart;
 
     PinName _rst;
-    DigitalOut* _rst_out_ptr;
+    DigitalOut *_rst_out_ptr;
 
-    SIM5320CellularDevice* _device;
-    CellularPower* _power;
-    CellularInformation* _information;
-    CellularNetwork* _network;
-    CellularSIM* _sim;
-    CellularSMS* _sms;
-    SIM5320GPSDevice* _gps;
-    SIM5320FTPClient* _ftp_client;
+    SIM5320CellularDevice *_device;
+    CellularInformation *_information;
+    CellularNetwork *_network;
+    CellularSMS *_sms;
+    CellularContext *_context;
+    SIM5320GPSDevice *_gps;
+    SIM5320FTPClient *_ftp_client;
 
     int _startup_request_count;
-    ATHandler* _at_ptr;
+    ATHandler *_at;
+
+    static const int _STARTUP_TIMEOUT_MS = 32000;
+    nsapi_error_t _reset_soft();
+    nsapi_error_t _reset_hard();
+    nsapi_error_t _skip_initialization_messages();
 };
 }
 
