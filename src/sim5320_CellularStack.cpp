@@ -20,7 +20,7 @@ SIM5320CellularStack::~SIM5320CellularStack()
     _at.set_urc_handler("+IP ERROR: No data", NULL);
 }
 
-#define DNS_QUERY_TIMEOUT 12000
+#define DNS_QUERY_TIMEOUT 32000
 
 nsapi_error_t SIM5320CellularStack::gethostbyname(const char *host, SocketAddress *address, nsapi_version_t version, const char *interface_name)
 {
@@ -69,8 +69,9 @@ bool SIM5320CellularStack::is_protocol_supported(nsapi_protocol_t protocol)
     switch (protocol) {
     case NSAPI_TCP:
         return true;
+    case NSAPI_UDP:
+        return true;
     default:
-        // TODO: add UDP support
         return false;
     }
 }
@@ -80,6 +81,8 @@ bool SIM5320CellularStack::is_protocol_supported(nsapi_protocol_t protocol)
 nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::CellularSocket *socket)
 {
     int open_code = -1;
+    int link_num;
+
     // use socket index as socket id
     int sock_id = -1;
     for (int i = 0; i < get_max_socket_count(); i++) {
@@ -92,16 +95,17 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
         tr_debug("socket.create: cannot resolve socket id");
         return NSAPI_ERROR_NO_SOCKET;
     }
-    // ignore socket creation, if remote address isn't set
-    if (!socket->remoteAddress) {
-        tr_debug("socket.create, sock_id %d: emote address isn't set", sock_id);
-        return NSAPI_ERROR_NO_SOCKET;
-    }
 
     socket->id = sock_id;
     _at.lock();
     tr_debug("socket.create, sock_id %d: create ...", sock_id);
     if (socket->proto == NSAPI_TCP) {
+        // ignore socket creation, if remote address isn't set
+        if (!socket->remoteAddress) {
+            tr_debug("socket.create, sock_id %d: remote address isn't set", sock_id);
+            return NSAPI_ERROR_NO_SOCKET;
+        }
+
         _at.cmd_start("AT+CIPOPEN=");
         _at.write_int(sock_id);
         _at.write_string("TCP");
@@ -115,10 +119,30 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
         _at.set_at_timeout(TCP_OPEN_TIMEOUT);
         _at.resp_start("+CIPOPEN:");
         _at.restore_at_timeout();
-        int link_num = _at.read_int();
+        link_num = _at.read_int();
         open_code = _at.read_int();
         _at.consume_to_stop_tag();
-    } // unsupported protocol is checked in "is_protocol_supported" function
+    } else if (socket->proto == NSAPI_UDP) {
+        _at.cmd_start("AT+CIPOPEN=");
+        _at.write_int(sock_id);
+        _at.write_string("UDP");
+        if (socket->remoteAddress) {
+            _at.write_string(socket->remoteAddress.get_ip_address());
+            _at.write_int(socket->remoteAddress.get_port());
+        } else {
+            _at.write_string("", false);
+            _at.write_string("", false);
+        }
+        _at.write_int(socket->localAddress.get_port());
+        _at.cmd_stop();
+        // check open result
+        _at.resp_start("+CIPOPEN:");
+        link_num = _at.read_int();
+        open_code = _at.read_int();
+        _at.consume_to_stop_tag();
+    } else {
+        return NSAPI_ERROR_UNSUPPORTED;
+    }
     nsapi_error_t err = _at.unlock_return_error();
 
     if (err || open_code != 0) {
@@ -141,6 +165,8 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.write_int(sock_id);
     _at.cmd_stop();
     // get OK or ERROR (note: a URC code can appear before OK or ERROR)
+    // FIXME: without delay it can freeze if a UDP socket is used
+    wait_ms(10);
     _at.resp_start("OK");
     _at.resp_stop();
 
@@ -155,7 +181,7 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     return _at.unlock_return_error();
 }
 
-#define MAX_WRITE_BLOCK_SIZE 230
+#define MAX_WRITE_BLOCK_SIZE 1500
 
 nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack::CellularSocket *socket, const SocketAddress &address, const void *data, nsapi_size_t size)
 {
@@ -171,51 +197,73 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack:
         return NSAPI_ERROR_CONNECTION_LOST;
     }
 
-    if (size > MAX_WRITE_BLOCK_SIZE) {
-        size = MAX_WRITE_BLOCK_SIZE;
+    switch (socket->proto) {
+    case NSAPI_TCP:
+        if (size > MAX_WRITE_BLOCK_SIZE) {
+            size = MAX_WRITE_BLOCK_SIZE;
+        }
+        break;
+    case NSAPI_UDP:
+        if (size > MAX_WRITE_BLOCK_SIZE) {
+            return NSAPI_ERROR_PARAMETER;
+        }
+        break;
+    default:
+        return NSAPI_ERROR_UNSUPPORTED;
     }
 
-    if (socket->proto == NSAPI_TCP) {
-        _at.lock();
+    _at.lock();
+    // write send command
+    switch (socket->proto) {
+    case NSAPI_TCP:
         _at.cmd_start("AT+CIPSEND=");
         _at.write_int(socket->id);
         _at.write_int(size);
         _at.cmd_stop();
-
-        _at.resp_start(">", true);
-        _at.write_bytes((const uint8_t *)data, size);
-
-        // read actual amount of the data that has been send
-        _at.resp_start();
-        _at.resp_stop();
-        _at.resp_start("+CIPSEND:");
-        int link_num = _at.read_int();
-        int req_send_length = _at.read_int();
-        int cnf_send_length = _at.read_int();
-        _at.consume_to_stop_tag();
-        nsapi_error_t err = _at.unlock_return_error();
-
-        if (err) {
-            tr_debug("socket.send, sock_id %d: fail to parse response", sock_id);
-            return err;
-        }
-        if (cnf_send_length < 0 || req_send_length != cnf_send_length) {
-            // error, close socket
-            _active_sockets &= ~(0x0001 << sock_id);
-            tr_debug("socket.send, sock_id %d: error, close socket", sock_id);
-            return NSAPI_ERROR_CONNECTION_LOST;
-        }
-
-        if (req_send_length == 0) {
-            tr_debug("socket.send, sock_id %d: socket is blocked", sock_id);
-            return NSAPI_ERROR_WOULD_BLOCK;
-        } else {
-            tr_debug("socket.send, sock_id %d: % bytes have been sent", req_send_length);
-            return req_send_length;
-        }
-    } else {
-        tr_debug("socket.send, sock_id %d: invalid protocol", sock_id);
+        break;
+    case NSAPI_UDP:
+        _at.cmd_start("AT+CIPSEND=");
+        _at.write_int(socket->id);
+        _at.write_int(size);
+        _at.write_string(address.get_ip_address());
+        _at.write_int(address.get_port());
+        _at.cmd_stop();
+        break;
+    default:
+        _at.unlock();
         return NSAPI_ERROR_UNSUPPORTED;
+    }
+    // write data
+    _at.resp_start(">", true);
+    _at.write_bytes((const uint8_t *)data, size);
+
+    // read actual amount of the data that has been send
+    _at.resp_start();
+    _at.resp_stop();
+    _at.resp_start("+CIPSEND:");
+    int link_num = _at.read_int();
+    int req_send_length = _at.read_int();
+    int cnf_send_length = _at.read_int();
+    _at.consume_to_stop_tag();
+    nsapi_error_t err = _at.unlock_return_error();
+
+    if (err) {
+        tr_debug("socket.send, sock_id %d: fail to parse response", sock_id);
+        return err;
+    }
+    if (cnf_send_length < 0 || req_send_length != cnf_send_length) {
+        // error, close socket
+        _active_sockets &= ~(0x0001 << sock_id);
+        tr_debug("socket.send, sock_id %d: error, close socket", sock_id);
+        return NSAPI_ERROR_CONNECTION_LOST;
+    }
+
+    if (req_send_length == 0) {
+        tr_debug("socket.send, sock_id %d: socket is blocked", sock_id);
+        return NSAPI_ERROR_WOULD_BLOCK;
+    } else {
+        tr_debug("socket.send, sock_id %d: %i bytes have been sent", sock_id, req_send_length);
+        return req_send_length;
     }
 }
 
@@ -224,6 +272,7 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_sendto_impl(AT_CellularStack:
 nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStack::CellularSocket *socket, SocketAddress *address, void *buffer, nsapi_size_t size)
 {
     nsapi_error_t err;
+    nsapi_size_or_error_t result;
     int mode;
     int link_id;
     int read_len;
@@ -254,7 +303,9 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
         }
     }
 
-    if (socket->proto == NSAPI_TCP) {
+    switch (socket->proto) {
+    case NSAPI_TCP:
+    case NSAPI_UDP:
         _at.lock();
         // read data to free input buffer for data
         _at.cmd_start("AT+CIPRXGET=");
@@ -301,15 +352,18 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
 
         if (read_len == 0 || _ciprxget_no_data) {
             tr_debug("socket.recv, sock_id %d: no data to read", sock_id);
-            return NSAPI_ERROR_WOULD_BLOCK;
+            result = NSAPI_ERROR_WOULD_BLOCK;
         } else {
             tr_debug("socket.recv, sock_id %d: %d bytes has been read", sock_id, read_len);
-            return read_len;
+            result = read_len;
         }
-    } else {
-        tr_debug("socket.recv, sock_id %d: invalid protocol", sock_id);
-        return NSAPI_ERROR_UNSUPPORTED;
+
+        break;
+    default:
+        result = NSAPI_ERROR_UNSUPPORTED;
     }
+
+    return result;
 }
 
 AT_CellularStack::CellularSocket *SIM5320CellularStack::_get_socket(int link_id)
