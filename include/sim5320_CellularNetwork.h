@@ -19,7 +19,6 @@ public:
 
     // AT_CellularNetwork
     virtual nsapi_error_t scan_plmn(operList_t &operators, int &ops_count);
-    virtual nsapi_error_t get_operator_names(operator_names_list &op_names);
     virtual nsapi_error_t get_registration_params(RegistrationType type, registration_params_t &reg_params);
 
     /**
@@ -48,7 +47,7 @@ protected:
     virtual nsapi_error_t set_access_technology_impl(RadioAccessTechnology op_rat);
 
 private:
-    int _OPERATORS_SCAN_TIMEOUT = 32000;
+    static const int _OPERATORS_SCAN_TIMEOUT = 120000;
 };
 }
 #endif // SIM5320_CELLULARNETWORK_H

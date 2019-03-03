@@ -1,3 +1,29 @@
 {
-  "name": "sim5320-driver"
+    "name": "sim5320-driver",
+    "config": {
+        "test_uart_rx": {
+            "help": "UART RX pin for sim5320. It should be used for library tests only",
+            "value": "PB_11"
+        },
+        "test_uart_tx": {
+            "help": "UART TX pin for sim5320. It should be used for library tests only",
+            "value": "PB_10"
+        },
+        "test_sim_pin": {
+            "help": "SIM pin. It it's is empty, then it's ignored. It should be used for library tests only",
+            "value": ""
+        },
+        "test_apn": {
+            "help": "APN name. It should be used for library tests only",
+            "value": "internet.mts.ru"
+        },
+        "test_apn_username": {
+            "help": "APN username. It should be used for library tests only",
+            "value": "mts"
+        },
+        "test_apn_password": {
+            "help": "APN password. It should be used for library tests only",
+            "value": "mts"
+        }
+    }
 }

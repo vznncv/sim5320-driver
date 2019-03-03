@@ -37,16 +37,6 @@ nsapi_error_t SIM5320CellularNetwork::scan_plmn(CellularNetwork::operList_t &ope
     return ret_code;
 }
 
-nsapi_error_t SIM5320CellularNetwork::get_operator_names(CellularNetwork::operator_names_list &op_names)
-{
-    _at.lock();
-    _at.set_at_timeout(_OPERATORS_SCAN_TIMEOUT);
-    nsapi_error_t ret_code = AT_CellularNetwork::get_operator_names(op_names);
-    _at.restore_at_timeout();
-    _at.unlock();
-    return ret_code;
-}
-
 nsapi_error_t SIM5320CellularNetwork::get_registration_params(CellularNetwork::RegistrationType type, CellularNetwork::registration_params_t &reg_params)
 {
     if (type == CellularNetwork::C_EREG) {
@@ -91,6 +81,7 @@ nsapi_error_t SIM5320CellularNetwork::get_active_access_technology(CellularNetwo
     _at.resp_start("+CNSMOD:");
     _at.skip_param();
     rat_code = _at.read_int();
+    _at.resp_stop();
     err = _at.unlock_return_error();
     if (err) {
         return err;

@@ -101,9 +101,11 @@ nsapi_error_t SIM5320CellularDevice::init()
     _at->lock();
     _at->cmd_start("AT+STK=0");
     _at->cmd_stop_read_resp();
+
     //    // switch CMEE codes to string format
     //    _at->cmd_start("AT+CMEE=2"); // verbose responses
     //    _at->cmd_stop_read_resp();
+
     // disable registration URC codes is they are enabled
     // note: if CellularMachine is used, it will enable them
     _at->cmd_start("AT+CREG=0");

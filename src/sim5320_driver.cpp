@@ -53,9 +53,6 @@ void SIM5320::_init_driver()
 
 SIM5320::~SIM5320()
 {
-    if (_cleanup_uart) {
-        delete _serial_ptr;
-    }
     _device->close_information();
     _device->close_network();
     _device->close_sms();
@@ -67,6 +64,10 @@ SIM5320::~SIM5320()
 
     if (_rst_out_ptr) {
         delete _rst_out_ptr;
+    }
+
+    if (_cleanup_uart) {
+        delete _serial_ptr;
     }
 }
 

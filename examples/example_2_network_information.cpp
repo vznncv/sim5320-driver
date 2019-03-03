@@ -1,7 +1,7 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * This example shows common device information (a SIM card can be inserted optionally).
+ * This example shows network information.
  *
  * Pin map:
  *
@@ -168,7 +168,6 @@ static void format_reg_params(char *buf, CellularNetwork::registration_params_t 
         get_radio_access_technology_name(params_ptr->_act));
 }
 
-// simple led demo
 int main()
 {
     // create driver
@@ -185,15 +184,19 @@ int main()
     // show current network information
     const size_t buf_size = 256;
     char buf[buf_size];
+    CellularNetwork::AttachStatus attach_status;
+    CellularDevice *cellular_device = sim5320.get_device();
     CellularNetwork *cellular_network = sim5320.get_network();
 
     // try to attach to network
     printf("Attach to network ...\n");
-    attach_err = cellular_network->set_attach();
-    if (attach_err) {
-        printf("Device has failed to connect to network.\n");
-    } else {
-        printf("Device has connected to network.\n");
+    cellular_network->set_attach();
+    for (int i = 0; i < 30; i++) {
+        cellular_network->get_attach(attach_status);
+        if (attach_status == CellularNetwork::Attached) {
+            break;
+        }
+        wait_ms(1000);
     }
 
     printf("Network information:\n");
@@ -204,7 +207,6 @@ int main()
     printf("  - registration mode: %s\n", get_nw_registering_mode_name(reg_mode));
 
     // show attach status
-    CellularNetwork::AttachStatus attach_status;
     CHECK_RET_CODE(cellular_network->get_attach(attach_status));
     printf("  - attach status: %s\n", get_attach_status_name(attach_status));
 
@@ -214,9 +216,6 @@ int main()
 
     // show registration parameters (CREG)
     CellularNetwork::registration_params_t reg_param;
-    CHECK_RET_CODE(cellular_network->get_registration_params(CellularNetwork::C_REG, reg_param));
-    format_reg_params(buf, &reg_param);
-    printf("  - registration params (CREG): %s\n", buf);
     CHECK_RET_CODE(cellular_network->get_registration_params(CellularNetwork::C_GREG, reg_param));
     format_reg_params(buf, &reg_param);
     printf("  - registration params (CGREG): %s\n", buf);
