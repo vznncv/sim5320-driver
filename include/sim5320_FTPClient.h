@@ -2,65 +2,44 @@
 #define SIM5320_FTPCLIENT_H
 
 #include "AT_CellularBase.h"
+#include "CellularList.h"
 #include "mbed.h"
 
 namespace sim5320 {
 
 class SIM5320FTPClient : public AT_CellularBase, private NonCopyable<SIM5320FTPClient> {
 public:
-    SIM5320FTPClient(ATHandler& at);
+    SIM5320FTPClient(ATHandler &at);
     virtual ~SIM5320FTPClient();
 
 private:
-    /**
-     * Process ftp response like:
-     *
-     * @code
-     * OK
-     *
-     * +FTPSCMD: <x>
-     * @endcode
-     *
-     * @code
-     * ERROR
-     * @endcode
-     *
-     * @param command_name
-     * @return
-     */
-    nsapi_error_t _process_ftp_ret_code(const char* command_name);
-
-    /**
-     * The same at ATHandler::lock but also clear any ftp errors and set ftp operation timeout.
-     */
-    void _lock();
-    void _unlock();
-
-    nsapi_error_t _last_ftp_error;
-    int8_t _lock_count;
-
-    nsapi_error_t _unlock_return_error();
-    nsapi_error_t _get_last_error();
-    nsapi_error_t _get_last_ftp_error();
-
-    void _clear_error(bool at_error = true, bool ftp_error = true);
-    void _set_ftp_error_code(int err_code);
-
-    void _read_ftp_code();
-
     // helper buffer for different purposes
-    nsapi_error_t _init_buffer();
-    static const size_t _STR_BUF_SIZE = 256;
-    char* _str_buf;
+    char *_get_buffer();
+    char *_buffer;
+    bool _cleanup_buffer;
 
 public:
-    // ftp API
+    static const size_t BUFFER_SIZE = 1024;
 
+    /**
+     * Set buffer for an internal operations.
+     *
+     * Some internal operations requires a buffer that has size BUFFER_SIZE. If it isn't set, it will be allocated by requirement.
+     * This method can be invoked only before any other actions once.
+     *
+     * @brief set_buffer
+     * @param buf
+     * @return
+     */
+    nsapi_error_t set_buffer(uint8_t *buf);
+
+    // ftp API
     enum FTPProtocol {
         FTP = 0,
-        FTPS_SSL = 1,
-        FTPS_TLS = 2,
-        FTPS = 3
+        FTPS_EXPLICIT_SSL = 1,
+        FTPS_EXPLICIT_TLS = 2,
+        FTPS_EXPLICIT = 2,
+        FTPS_IMPLICIT = 3
     };
 
     enum FTPErrorCode {
@@ -79,33 +58,65 @@ public:
     };
 
     /**
-    * Connect to ftp server.
-    *
-    * @param host ftp server host
-    * @param port ftp port
-    * @param protocol ftp protocol (ftp or ftps)
-    * @param username username. If it isn't set then "anonymous"
-    * @param password user password
-    * @return 0 on success, non-zero on failure
-    */
-    nsapi_error_t connect(const char* host, int port = 21, FTPProtocol protocol = FTP, const char* username = "anonymous", const char* password = "");
+     * Connect to ftp server.
+     *
+     * @param host ftp server host
+     * @param port ftp port
+     * @param protocol ftp protocol (ftp or ftps)
+     * @param username username. If it isn't set then "anonymous"
+     * @param password user password
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t connect(const char *host, int port, FTPProtocol protocol, const char *username = "anonymous", const char *password = "");
 
     /**
-    * Get current working directory.
-    *
-    * @param work_dir
-    * @param max_size size of the workdir buffer.
-    * @return 0 on success, non-zero on failure
-    */
-    nsapi_error_t get_cwd(char* work_dir, size_t max_size);
+     * Connect to ftp server
+     *
+     * Address has the following format:
+     * @code
+     * <protocol>://<username>:<password>@<hostname>:<port>
+     * @endcode
+     *
+     * Protocol can be:
+     * - "ftp" - for ftp
+     * - "ftps" - for ftps with explicit encryption
+     * - "ftps+e" - for ftps with explicit encryption
+     * - "ftps+i" - for ftps with implicit encryption
+     *
+     * URL samples:
+     *
+     * - ftp://demo:password@test.rebex.net:21
+     * - ftps://demo:password@test.rebex.net:21
+     * - ftps+i://demo:password@test.rebex.net:990
+     *
+     * @brief connect
+     * @param address
+     * @return
+     */
+    nsapi_error_t connect(const char *address);
 
     /**
-    * Set current working directory.
-    *
-    * @param work_dir
-    * @return 0 on success, non-zero on failure
-    */
-    nsapi_error_t set_cwd(const char* work_dir);
+     * @brief ftp_close
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t disconnect();
+
+    /**
+     * Get current working directory.
+     *
+     * @param work_dir
+     * @param max_size size of the workdir buffer.
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t get_cwd(char *work_dir, size_t max_size);
+
+    /**
+     * Set current working directory.
+     *
+     * @param work_dir
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t set_cwd(const char *work_dir);
 
     // TODO: add method to list files in the directory
 
@@ -115,7 +126,7 @@ public:
      * @param size file size or negative value if file doesn't exists
      * @return
      */
-    nsapi_error_t get_file_size(const char* path, long& size);
+    nsapi_error_t get_file_size(const char *path, long &size);
 
     /**
     * Check if file exists on a ftp server.
@@ -124,7 +135,7 @@ public:
     * @param result true if file exists, otherwise false
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t isfile(const char* path, bool& result);
+    nsapi_error_t isfile(const char *path, bool &result);
 
     /**
      * Check if given path is directory.
@@ -133,7 +144,7 @@ public:
      * @param result true if directory exists, otherwise false
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t isdir(const char* path, bool& result);
+    nsapi_error_t isdir(const char *path, bool &result);
 
     /**
      * Check if file or directory exists.
@@ -142,23 +153,38 @@ public:
      * @param result rue if path exists, otherwise false
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t exists(const char* path, bool& result);
+    nsapi_error_t exists(const char *path, bool &result);
 
     /**
-    * Create a directory on a ftp server.
+    * Create directory on a ftp server.
     *
     * @param path directory path
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t mkdir(const char* path);
+    nsapi_error_t mkdir(const char *path);
 
     /**
-    * Remove a directory on a ftp server.
+    * Remove directory on a ftp server.
     *
     * @param path directory path
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t rmdir(const char* path);
+    nsapi_error_t rmdir(const char *path);
+
+private:
+    nsapi_error_t _rmtree_impl(char *path_buf, size_t path_buf_len);
+
+public:
+    /**
+     * Remove directory recursivy on a ftp server.
+     *
+     * warning: this method should be used for tests only as it make a lot of memory allocation operations
+     *
+     * @param path directory path
+     * @param remove_root if it's @c false, then remove directory content, but don't delete directory itself
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t rmtree(const char *path, bool remove_root = true);
 
     /**
     * Remove a file on a ftp server.
@@ -166,7 +192,41 @@ public:
     * @param path file path
     * @return 0 on success, non-zero on failure
     */
-    bool rmfile(const char* path);
+    nsapi_error_t rmfile(const char *path);
+
+    struct dir_entry_t {
+        char *name;
+        /**
+         * DT_REG, DT_DIR or DT_UNKNOWN.
+         */
+        char d_type;
+
+        dir_entry_t *next;
+
+    private:
+        dir_entry_t();
+        ~dir_entry_t();
+        friend CellularList<dir_entry_t>;
+    };
+
+    /**
+     * List of the entries that are returned by listdir method.
+     */
+    typedef CellularList<dir_entry_t> dir_entry_list_t;
+
+    /**
+     * Get list of the files in the specified directories.
+     *
+     * It isn't recommended to use this function for a production as it can make a lot of memory allocation dynamically.
+     * But you can use it for a testing purposes.
+     *
+     * warning: the method cannot process correctly names that contain non-ascii symbols or spaces.
+     *
+     * @param path
+     * @param dir_entry_list
+     * @return
+     */
+    nsapi_error_t listdir(const char *path, dir_entry_list_t *dir_entry_list);
 
     /**
     * Put file on an ftp server.
@@ -183,25 +243,70 @@ public:
     * @param data_writer callback to provide data
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t put(const char* path, Callback<ssize_t(uint8_t* data, size_t size)> data_writer);
+    nsapi_error_t put(const char *path, Callback<ssize_t(uint8_t *data, size_t size)> data_writer);
+
+    /**
+    * Put file on an ftp server.
+    *
+    * This version accept buffer instead of data reader.
+    *
+    * @param path ftp file path
+    * @param buf buffer with a data
+    * @param len buffer size
+    * @return 0 on success, non-zero on failure
+    */
+    nsapi_error_t put(const char *path, uint8_t *buf, size_t len);
 
     /**
     * Get file from ftp server.
     *
     * The read data will be processed by @p data_writer callback. It accepts buffer `data`, its length `size`,
-    * and returns amount of the data that has been processed.
+    * and returns amount of the data that has been processed. In case of error it should return negative value.
     *
     * @param path ftp file path
     * @param data_reader callback
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t get(const char* path, Callback<ssize_t(uint8_t* data, size_t size)> data_reader);
+    nsapi_error_t get(const char *path, Callback<ssize_t(uint8_t *data, size_t size)> data_reader);
 
     /**
-    * @brief ftp_close
+    * Download file from ftp server.
+    *
+    *
+    * @param remote_path ftp file path
+    * @param local_path destination path
     * @return 0 on success, non-zero on failure
     */
-    nsapi_error_t disconnect();
+    nsapi_error_t download(const char *remote_path, const char *local_path);
+
+    /**
+    * Download file from ftp server.
+    *
+    * @param remote_path ftp file path
+    * @param local_file local file descriptor
+    * @return 0 on success, non-zero on failure
+    */
+    nsapi_error_t download(const char *remote_path, FILE *local_file);
+
+    /**
+     * Upload file to ftp server.
+     *
+     * @param local_path local file location
+     * @param remote_path ftp file path
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t upload(const char *local_path, const char *remote_path);
+
+private:
+    /**
+     * Data reader implementation for get/listdir commands.
+     *
+     * @param path
+     * @param data_reader
+     * @param command
+     * @return
+     */
+    nsapi_error_t _get_data_impl(const char *path, Callback<ssize_t(uint8_t *data, size_t size)> data_reader, const char *command);
 };
 }
 

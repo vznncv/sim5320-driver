@@ -48,4 +48,3 @@ you can reset device to factory settings, using the following steps:
 ## TODO:
 
 - fix SMS functionality to process long messages
-- add directory listing and file downloading for FTP client

@@ -1,5 +1,9 @@
 ﻿#include "sim5320_CellularStack.h"
+#include "mbed-trace/mbed_trace.h"
 #include "sim5320_utils.h"
+
+#define TRACE_GROUP "sim5320_cellular_stack"
+
 using namespace sim5320;
 
 SIM5320CellularStack::SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type)

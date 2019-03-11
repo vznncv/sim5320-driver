@@ -123,7 +123,6 @@ nsapi_error_t SIM5320::init()
     //    if ((err = sim5320_network->set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::PRATM_AUTOMATIC))) {
     //        return err;
     //    }
-
     //    // configure at mode
     //    err = _power->set_at_mode();
     //    if (err) {
@@ -313,8 +312,7 @@ nsapi_error_t SIM5320::_reset_soft()
     _at->unlock();
 
     // wait device startup messages
-    _skip_initialization_messages();
-    return NSAPI_ERROR_OK;
+    return _skip_initialization_messages();
 }
 
 nsapi_error_t SIM5320::_reset_hard()
@@ -328,8 +326,7 @@ nsapi_error_t SIM5320::_reset_hard()
         wait_ms(200);
         _at->flush();
         _at->clear_error();
-        _skip_initialization_messages();
-        return NSAPI_ERROR_OK;
+        return _skip_initialization_messages();
     } else {
         return -1;
     }
@@ -337,16 +334,18 @@ nsapi_error_t SIM5320::_reset_hard()
 
 nsapi_error_t SIM5320::_skip_initialization_messages()
 {
+    int res;
+
     _at->lock();
     _at->set_at_timeout(_STARTUP_TIMEOUT_MS);
     _at->resp_start("START", true);
-    _at->clear_error();
+    res = _at->get_last_error();
     // if there is not error, wait PB DONE
     _at->resp_start("PB DONE", true);
+    // clear any error codes of this step
     _at->clear_error();
     _at->restore_at_timeout();
-    // clear any error codes of this step
     _at->unlock();
 
-    return NSAPI_ERROR_OK;
+    return res;
 }
