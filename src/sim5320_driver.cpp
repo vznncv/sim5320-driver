@@ -118,34 +118,9 @@ nsapi_error_t SIM5320::init()
         return err;
     }
 
-    // set automatic radio access technology choosing
+    //    // set automatic radio access technology choosing
     //    SIM5320CellularNetwork *sim5320_network = (SIM5320CellularNetwork *)_network;
-    //    if ((err = sim5320_network->set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::PRATM_AUTOMATIC))) {
-    //        return err;
-    //    }
-    //    // configure at mode
-    //    err = _power->set_at_mode();
-    //    if (err) {
-    //        return err;
-    //    }
-    //    // set GPS settings
-    //    err = _gps->init();
-    //    if (err) {
-    //        return err;
-    //    }
-    //    // configure network driver
-    //    err = _network->init();
-    //    if (err) {
-    //        return err;
-    //    }
-    //    // configure SMS to text mode
-    //    err = _sms->initialize(CellularSMS::CellularSMSMmodeText);
-    //    if (err) {
-    //        return err;
-    //    }
-    //    // prefer to store all data in the sim
-    //    err = _sms->set_cpms("SM", "SM", "SM");
-    //    if (err) {
+    //    if ((err = sim5320_network->set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::PRA;TM_AUTOMATIC))) {
     //        return err;
     //    }
 
@@ -224,34 +199,6 @@ nsapi_error_t SIM5320::reset(SIM5320::ResetMode reset_mode)
 
     return NSAPI_ERROR_OK;
 }
-
-//#define REGISTRATION_STATUS_DELAY 1000
-
-//nsapi_error_t SIM5320::wait_network_registration(int timeout_ms)
-//{
-//    Timer timer;
-//    nsapi_error_t err_code;
-//    CellularNetwork::RegistrationStatus registration_status;
-
-//    timer.start();
-//    while (1) {
-//        //err_code = _network->get_registration_status(CellularNetwork::C_REG, registration_status);
-//        if (err_code) {
-//            break;
-//        }
-//        if (registration_status == CellularNetwork::RegisteredHomeNetwork || registration_status == CellularNetwork::RegisteredRoaming) {
-//            break;
-//        }
-//        if (timer.read_ms() > timeout_ms) {
-//            err_code = NSAPI_ERROR_TIMEOUT;
-//            break;
-//        }
-
-//        wait_ms(REGISTRATION_STATUS_DELAY);
-//    }
-
-//    return err_code;
-//}
 
 nsapi_error_t SIM5320::is_active(bool &active)
 {

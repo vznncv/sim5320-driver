@@ -1,7 +1,7 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows FTP usage.
+ * The example shows GPS usage.
  *
  * Pin map:
  *
@@ -52,17 +52,22 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
+void print_time(time_t *time)
+{
+    tm parsed_time;
+    char str_buf[32];
+    gmtime_r(time, &parsed_time);
+    strftime(str_buf, 32, "%Y/%m/%d %H:%M:%S (UTC)", &parsed_time);
+    printf("%s", str_buf);
+}
+
 // simple led demo
 int main()
 {
     // create driver
     SIM5320 sim5320(PB_10, PB_11);
-    char buf[256];
-    const char *ftp_path = "ftp://ftp.yandex.ru";
-    const char *demo_dir = "/debian";
-    const char *demo_file = "/debian/README";
-
     // reset and initialize device
+    printf("Reset device ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
@@ -73,38 +78,40 @@ int main()
     //context->set_sim_pin("1234");
     context->set_credentials("internet.mts.ru", "mts", "mts");
     // connect to network
-    CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
+    // note: this operation is optional
+    CHECK_RET_CODE(context->connect());
     printf("The device has connected to network\n");
 
-    // 1. Connect to ftp folder
-    SIM5320FTPClient *ftp_client = sim5320.get_ftp_client();
-    printf("Connect to \"%s\" ...\n", ftp_path);
-    CHECK_RET_CODE(ftp_client->connect(ftp_path));
-    printf("Connected\n");
-
-    // 2. Change default location
-    CHECK_RET_CODE(ftp_client->set_cwd(demo_dir));
-
-    // 3. Show directory
-    SIM5320FTPClient::dir_entry_list_t dir_entry_list;
-    CHECK_RET_CODE(ftp_client->listdir(demo_dir, &dir_entry_list));
-    sprintf(buf, "list directory \"%s\"", demo_dir);
-    print_header(buf);
-    SIM5320FTPClient::dir_entry_t *dir_entry_ptr = dir_entry_list.get_head();
-    while (dir_entry_ptr != NULL) {
-        printf("- %s (%s)\n", dir_entry_ptr->name, dir_entry_ptr->d_type == DT_DIR ? "DIR" : "FILE");
-        dir_entry_ptr = dir_entry_ptr->next;
+    // GPS demo
+    SIM5320GPSDevice *gps = sim5320.get_gps();
+    CHECK_RET_CODE(gps->start());
+    // set desired GPS accuracy
+    CHECK_RET_CODE(gps->set_desired_accuracy(25));
+    print_header("Start gps");
+    SIM5320GPSDevice::gps_coord_t gps_coord;
+    bool has_gps_coord = false;
+    int gps_count = 5;
+    while (gps_count >= 0) {
+        gps->get_coord(has_gps_coord, gps_coord);
+        if (has_gps_coord) {
+            gps_count--;
+            // print gps coordinates
+            printf("GPS data:\n");
+            printf("  - longitude: %.8f\n", gps_coord.longitude);
+            printf("  - latitude: %.8f\n", gps_coord.latitude);
+            printf("  - altitude: %.1f\n", gps_coord.altitude);
+            printf("  - timestamp: ");
+            print_time(&gps_coord.time);
+            printf("\n");
+        } else {
+            printf("Wait gps coordinates...\n");
+        }
+        wait_ms(5000);
     }
     print_separator();
 
-    // 4. read file
-    sprintf(buf, "File \"%s\"", demo_file);
-    print_header(buf);
-    CHECK_RET_CODE(ftp_client->download(demo_file, stdout));
-    print_separator();
-
     printf("Stop ...\n");
-    CHECK_RET_CODE(ftp_client->disconnect());
+    CHECK_RET_CODE(gps->stop());
     CHECK_RET_CODE(context->disconnect());
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");

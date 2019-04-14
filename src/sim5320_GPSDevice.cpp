@@ -1,7 +1,11 @@
 #include "sim5320_GPSDevice.h"
+#include "sim5320_utils.h"
 using namespace sim5320;
 
-SIM5320GPSDevice::SIM5320GPSDevice(ATHandler& at)
+#define GPS_START_STOP_CHECK_DELAY 2000
+#define GPS_START_STOP_CHECK_NUM 10
+
+SIM5320GPSDevice::SIM5320GPSDevice(ATHandler &at)
     : AT_CellularBase(at)
 {
 }
@@ -10,72 +14,90 @@ SIM5320GPSDevice::~SIM5320GPSDevice()
 {
 }
 
-nsapi_error_t SIM5320GPSDevice::init()
+nsapi_error_t SIM5320GPSDevice::start(SIM5320GPSDevice::Mode gps_mode)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at, GPS_START_STOP_CHECK_NUM * GPS_START_STOP_CHECK_DELAY);
 
+    // default settings
     // set AGPS url
     _at.cmd_start("AT+CGPSURL=");
     _at.write_string(get_assist_server_url());
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
     // set AGPS ssl usage
     _at.cmd_start("AT+CGPSSSL=");
     _at.write_int(use_assist_server_ssl() ? 1 : 0);
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
     // disable automatic (AT+CGPSAUTO) GPS start
     _at.cmd_start("AT+CGPSAUTO=0");
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
     // set position mode (AT+CGPSPMD) to 127
     _at.cmd_start("AT+CGPSPMD=127");
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
     // ensure switch to standalone mode automatically
     _at.cmd_start("AT+CGPSMSB=1");
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
 
-    return _at.unlock_return_error();
-}
-
-nsapi_error_t SIM5320GPSDevice::start(SIM5320GPSDevice::Mode gps_mode)
-{
-    _at.lock();
     int mode_code = gps_mode + 1;
-
     _at.cmd_start("AT+CGPS=");
     _at.write_int(1);
     _at.write_int(mode_code);
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
 
-    return _at.unlock_return_error();
+    // wait startup
+    bool active = false;
+    int i = 0;
+    int err;
+    while (true) {
+        err = is_active(active);
+        if (err) {
+            return err;
+        }
+        if (active) {
+            break;
+        }
+        i++;
+        if (i >= GPS_START_STOP_CHECK_NUM) {
+            return MBED_ERROR_CODE_TIME_OUT;
+        }
+        wait_ms(GPS_START_STOP_CHECK_DELAY);
+    }
+
+    return _at.get_last_error();
 }
 
 nsapi_error_t SIM5320GPSDevice::stop()
 {
-    _at.lock();
+    ATHandlerLocker locker(_at, GPS_START_STOP_CHECK_NUM * GPS_START_STOP_CHECK_DELAY);
 
     _at.cmd_start("AT+CGPS=");
     _at.write_int(0);
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
 
-    return _at.unlock_return_error();
+    // wait shutdown
+    bool active = true;
+    int i = 0;
+    int err;
+    while (true) {
+        err = is_active(active);
+        if (err) {
+            return err;
+        }
+        if (!active) {
+            break;
+        }
+        i++;
+        if (i >= GPS_START_STOP_CHECK_NUM) {
+            return MBED_ERROR_CODE_TIME_OUT;
+        }
+        wait_ms(GPS_START_STOP_CHECK_DELAY);
+    }
+
+    return _at.get_last_error();
 }
 
-nsapi_error_t SIM5320GPSDevice::is_active(bool& active)
+nsapi_error_t SIM5320GPSDevice::is_active(bool &active)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at);
 
     int on_flag;
     _at.cmd_start("AT+CGPS?");
@@ -86,7 +108,7 @@ nsapi_error_t SIM5320GPSDevice::is_active(bool& active)
     _at.resp_stop();
 
     active = on_flag;
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
 const static SIM5320GPSDevice::Mode GPS_MODE_MAP[] = {
@@ -95,9 +117,9 @@ const static SIM5320GPSDevice::Mode GPS_MODE_MAP[] = {
     SIM5320GPSDevice::UE_BASED_MODE,
 };
 
-nsapi_error_t SIM5320GPSDevice::get_mode(SIM5320GPSDevice::Mode& mode)
+nsapi_error_t SIM5320GPSDevice::get_mode(SIM5320GPSDevice::Mode &mode)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at);
 
     int mode_code;
     _at.cmd_start("AT+CGPS?");
@@ -111,25 +133,23 @@ nsapi_error_t SIM5320GPSDevice::get_mode(SIM5320GPSDevice::Mode& mode)
     mode_code = mode_code > 2 ? 2 : mode_code;
     mode = GPS_MODE_MAP[mode_code];
 
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
 nsapi_error_t SIM5320GPSDevice::set_desired_accuracy(int value)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at);
 
     _at.cmd_start("AT+CGPSHOR=");
     _at.write_int(value);
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
 
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
-nsapi_error_t SIM5320GPSDevice::get_desired_accuracy(int& value)
+nsapi_error_t SIM5320GPSDevice::get_desired_accuracy(int &value)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at);
 
     _at.cmd_start("AT+CGPSHOR?");
     _at.cmd_stop();
@@ -137,10 +157,10 @@ nsapi_error_t SIM5320GPSDevice::get_desired_accuracy(int& value)
     value = _at.read_int();
     _at.resp_stop();
 
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
-nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevice::gps_coord_t& coord)
+nsapi_error_t SIM5320GPSDevice::get_coord(bool &has_coordinates, SIM5320GPSDevice::gps_coord_t &coord)
 {
     char lat_str[16];
     char lat_dir_str[4];
@@ -150,7 +170,7 @@ nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevic
     char utc_time_str[10];
     char alt_str[10];
 
-    _at.lock();
+    ATHandlerLocker locker(_at);
 
     _at.cmd_start("AT+CGPSINFO");
     _at.cmd_stop();
@@ -207,10 +227,10 @@ nsapi_error_t SIM5320GPSDevice::get_coord(bool& has_coordinates, SIM5320GPSDevic
     }
     _at.resp_stop();
 
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
-const char* SIM5320GPSDevice::get_assist_server_url()
+const char *SIM5320GPSDevice::get_assist_server_url()
 {
     return "supl.google.com:7276";
 }
