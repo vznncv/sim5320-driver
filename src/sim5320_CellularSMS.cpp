@@ -119,11 +119,6 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, c
             _at.read_string(&time_stamp_tmp[len], SMS_MAX_TIME_STAMP_SIZE - len);
         }
         // get value of the last parameter (message length)
-        message_len = 0;
-        while (_at.read_string(message_len_str, 4) >= 0) {
-        }
-        char *end_ptr;
-        message_len = std::strtol(message_len_str, &end_ptr, 10);
         _at.consume_to_stop_tag();
 
         if (strcmp(time_stamp_tmp, time_stamp) > 0) {
@@ -132,12 +127,27 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, c
             strcpy(phone_num, phone_num_tmp);
             // read message
             // TODO: make better sms message processing
-            _at.read_bytes((uint8_t *)buf, message_len);
-            buf[message_len + 1] = '\0';
-            if (buf_size) {
-                *buf_size = 0;
+            char sym = '\0';
+            char prev_sym = '\0';
+            int buf_i = 0;
+            int read_code = 1;
+            while (sym != '\n' && prev_sym != '\r' && read_code == 1) {
+                prev_sym = sym;
+                read_code = _at.read_bytes((uint8_t *)&sym, 1);
+                if (buf_i < buf_len) {
+                    buf[buf_i] = sym;
+                    buf_i++;
+                }
             }
-            _at.consume_to_stop_tag();
+            // add '\0' to buffer
+            if (buf_i >= 2 && buf[buf_i - 2] == '\r' && buf[buf_i - 1] == '\n') {
+                buf[buf_i - 2] = '\0';
+            } else if (buf_i >= buf_len) {
+                buf[buf_i - 1] = '\0';
+            } else {
+                buf[buf_i] = '\0';
+            }
+
         } else {
             _at.consume_to_stop_tag();
         }

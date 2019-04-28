@@ -73,7 +73,7 @@ SIM5320::~SIM5320()
 
 nsapi_error_t SIM5320::start_uart_hw_flow_ctrl()
 {
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     if (_rts != NC && _cts != NC) {
         _serial_ptr->set_flow_control(UARTSerial::RTSCTS, _rts, _cts);
         _at->cmd_start("AT+IFC=2,2");
@@ -86,23 +86,22 @@ nsapi_error_t SIM5320::start_uart_hw_flow_ctrl()
         _at->cmd_start("AT+IFC=0,2");
         _at->cmd_stop();
     } else {
-        _at->unlock();
         return NSAPI_ERROR_PARAMETER;
     }
     _at->resp_start();
     _at->resp_stop();
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320::stop_uart_hw_flow_ctrl()
 {
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     if (_rts != NC || _cts != NC) {
         _serial_ptr->set_flow_control(SerialBase::Disabled, _rts, _cts);
         _at->cmd_start("AT+IFC=0,0");
         _at->cmd_stop_read_resp();
     }
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320::init()
@@ -129,12 +128,12 @@ nsapi_error_t SIM5320::init()
 
 nsapi_error_t SIM5320::set_factory_settings()
 {
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     _at->cmd_start("AT&F");
     _at->cmd_stop_read_resp();
     _at->cmd_start("AT&F1");
     _at->cmd_stop_read_resp();
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320::request_to_start()
@@ -255,14 +254,17 @@ SIM5320FTPClient *SIM5320::get_ftp_client()
 
 nsapi_error_t SIM5320::_reset_soft()
 {
-    _at->lock();
-    // send reset command
-    _at->cmd_start("AT+CRESET");
-    _at->cmd_stop_read_resp();
+    {
+        ATHandlerLocker locker(*_at);
+        // send reset command
+        _at->cmd_start("AT+CRESET");
+        _at->cmd_stop_read_resp();
 
-    // if error occurs then stop action
-    SIM5320_UNLOCK_RETURN_IF_ERROR(_at);
-    _at->unlock();
+        // if error occurs then stop action
+        if (_at->get_last_error()) {
+            return _at->get_last_error();
+        }
+    }
 
     // wait device startup messages
     return _skip_initialization_messages();
@@ -289,16 +291,13 @@ nsapi_error_t SIM5320::_skip_initialization_messages()
 {
     int res;
 
-    _at->lock();
-    _at->set_at_timeout(_STARTUP_TIMEOUT_MS);
+    ATHandlerLocker locker(*_at, _STARTUP_TIMEOUT_MS);
     _at->resp_start("START", true);
     res = _at->get_last_error();
     // if there is not error, wait PB DONE
     _at->resp_start("PB DONE", true);
     // clear any error codes of this step
     _at->clear_error();
-    _at->restore_at_timeout();
-    _at->unlock();
 
     return res;
 }

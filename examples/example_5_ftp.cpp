@@ -3,10 +3,16 @@
  *
  * The example shows FTP usage.
  *
+ * Requirements:
+ *
+ * - active SIM card with an internet access
+ *
  * Pin map:
  *
  * - PB_10 - UART TX (SIM5320E)
  * - PB_11 - UART RX (SIM5320E)
+ *
+ * Note: to run the example, you should an adjust APN settings in the code.
  */
 
 #include "mbed.h"
@@ -18,12 +24,14 @@
 using namespace sim5320;
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+#define CHECK_RET_CODE(expr)                                                           \
+    {                                                                                  \
+        int err = expr;                                                                \
+        if (err < 0) {                                                                 \
+            char err_msg[64];                                                          \
+            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
+            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
+        }                                                                              \
     }
 
 DigitalOut led(LED2);
@@ -52,7 +60,6 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
-// simple led demo
 int main()
 {
     // create driver
@@ -71,6 +78,7 @@ int main()
     CellularContext *context = sim5320.get_context();
     // set credential
     //context->set_sim_pin("1234");
+    // note: set your APN parameters
     context->set_credentials("internet.mts.ru", "mts", "mts");
     // connect to network
     CHECK_RET_CODE(context->connect()); // note: by default operations is blocking

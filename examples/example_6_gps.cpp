@@ -18,15 +18,32 @@
 using namespace sim5320;
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+#define CHECK_RET_CODE(expr)                                                           \
+    {                                                                                  \
+        int err = expr;                                                                \
+        if (err < 0) {                                                                 \
+            char err_msg[64];                                                          \
+            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
+            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
+        }                                                                              \
     }
 
 DigitalOut led(LED2);
+InterruptIn button(BUTTON1);
+
+struct {
+    volatile int counter;
+
+    void reset()
+    {
+        counter = 0;
+    }
+
+    void click()
+    {
+        counter++;
+    }
+} typedef click_detector_t;
 
 #define SEPARATOR_WIDTH 80
 
@@ -61,7 +78,6 @@ void print_time(time_t *time)
     printf("%s", str_buf);
 }
 
-// simple led demo
 int main()
 {
     // create driver
@@ -90,11 +106,12 @@ int main()
     print_header("Start gps");
     SIM5320GPSDevice::gps_coord_t gps_coord;
     bool has_gps_coord = false;
-    int gps_count = 5;
-    while (gps_count >= 0) {
+    click_detector_t click_detector = { .counter = 0 };
+    button.rise(callback(&click_detector, &click_detector_t::click));
+
+    while (click_detector.counter == 0) {
         gps->get_coord(has_gps_coord, gps_coord);
         if (has_gps_coord) {
-            gps_count--;
             // print gps coordinates
             printf("GPS data:\n");
             printf("  - longitude: %.8f\n", gps_coord.longitude);

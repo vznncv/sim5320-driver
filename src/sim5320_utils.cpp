@@ -106,6 +106,7 @@ sim5320::ATHandlerLocker::~ATHandlerLocker()
 {
     if (_timeout >= 0) {
         _at.restore_at_timeout();
+        //_at.set_at_timeout(SIM5320_DEFAULT_TIMEOUT, true);
     }
     for (int i = 0; i < _lock_count; i++) {
         _at.unlock();

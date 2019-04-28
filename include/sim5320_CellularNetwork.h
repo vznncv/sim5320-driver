@@ -18,6 +18,7 @@ public:
     virtual nsapi_error_t get_ciot_network_optimization_config(CIoT_Supported_Opt &supported_network_opt);
 
     // AT_CellularNetwork
+    virtual nsapi_error_t detach();
     virtual nsapi_error_t scan_plmn(operList_t &operators, int &ops_count);
     virtual nsapi_error_t get_registration_params(RegistrationType type, registration_params_t &reg_params);
 

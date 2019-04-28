@@ -1,4 +1,5 @@
 #include "sim5320_CellularInformation.h"
+#include "sim5320_utils.h"
 using namespace sim5320;
 
 SIM5320CellularInformation::SIM5320CellularInformation(ATHandler &at_handler)
@@ -54,7 +55,7 @@ nsapi_error_t SIM5320CellularInformation::_get_simcom_info(const char *cmd, cons
     if (buf == NULL || buf_size == 0) {
         return NSAPI_ERROR_PARAMETER;
     }
-    _at.lock();
+    ATHandlerLocker locker(_at);
     _at.cmd_start(cmd);
     _at.cmd_stop();
     _at.set_delimiter('\r');
@@ -62,5 +63,5 @@ nsapi_error_t SIM5320CellularInformation::_get_simcom_info(const char *cmd, cons
     _at.read_string(buf, buf_size - 1);
     _at.resp_stop();
     _at.set_default_delimiter();
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }

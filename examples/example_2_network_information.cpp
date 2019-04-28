@@ -3,29 +3,68 @@
  *
  * This example shows network information.
  *
+ * Requirements:
+ *
+ * - active SIM card
+ *
  * Pin map:
  *
  * - PB_10 - UART TX (SIM5320E)
  * - PB_11 - UART RX (SIM5320E)
  */
 
+#include "math.h"
 #include "mbed.h"
-#include <math.h>
-#include <time.h>
-
 #include "sim5320_driver.h"
+#include "stdlib.h"
+#include "time.h"
 
 using namespace sim5320;
 
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+#define CHECK_RET_CODE(expr)                                                           \
+    {                                                                                  \
+        int err = expr;                                                                \
+        if (err < 0) {                                                                 \
+            char err_msg[64];                                                          \
+            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
+            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
+        }                                                                              \
     }
 
 DigitalOut led(LED2);
+
+nsapi_error_t attach_to_network(SIM5320 *sim5320)
+{
+    nsapi_error_t err = 0;
+    CellularNetwork::AttachStatus attach_status;
+    CellularNetwork *cellular_network = sim5320->get_network();
+
+    for (int i = 0; i < 10; i++) {
+        err = cellular_network->set_attach();
+        if (!err) {
+            break;
+        }
+        wait_ms(1000);
+    }
+    if (err) {
+        return err;
+    }
+
+    for (int i = 0; i < 30; i++) {
+        cellular_network->get_attach(attach_status);
+        if (attach_status == CellularNetwork::Attached) {
+            return NSAPI_ERROR_OK;
+        }
+        wait_ms(1000);
+    }
+    return NSAPI_ERROR_TIMEOUT;
+}
+
+nsapi_error_t detach_from_network(SIM5320 *sim5320)
+{
+    CellularNetwork *cellular_network = sim5320->get_network();
+    return cellular_network->detach();
+}
 
 static const char *get_nw_registering_mode_name(CellularNetwork::NWRegisteringMode mode)
 {
@@ -172,8 +211,6 @@ int main()
 {
     // create driver
     SIM5320 sim5320(PB_10, PB_11);
-    nsapi_error_t err;
-    nsapi_error_t attach_err;
     // reset and initialize device
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
@@ -185,19 +222,13 @@ int main()
     const size_t buf_size = 256;
     char buf[buf_size];
     CellularNetwork::AttachStatus attach_status;
-    CellularDevice *cellular_device = sim5320.get_device();
     CellularNetwork *cellular_network = sim5320.get_network();
 
+    // set credential
+    //CHECK_RET_CODE(sim5320.get_device()->set_pin("1234"));
     // try to attach to network
     printf("Attach to network ...\n");
-    cellular_network->set_attach();
-    for (int i = 0; i < 30; i++) {
-        cellular_network->get_attach(attach_status);
-        if (attach_status == CellularNetwork::Attached) {
-            break;
-        }
-        wait_ms(1000);
-    }
+    CHECK_RET_CODE(attach_to_network(&sim5320));
 
     printf("Network information:\n");
 
@@ -250,11 +281,8 @@ int main()
         nw_operator_name_ptr = nw_operator_name_ptr->next;
     }
 
-    if (attach_err) {
-        printf("Detach from network ...");
-        CHECK_RET_CODE(cellular_network->detach());
-    }
-
+    // detach from network and stop modem
+    CHECK_RET_CODE(detach_from_network(&sim5320));
     printf("Stop ...\n");
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");

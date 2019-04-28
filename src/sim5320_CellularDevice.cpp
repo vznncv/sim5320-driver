@@ -6,8 +6,6 @@
 #include "sim5320_utils.h"
 using namespace sim5320;
 
-#define SIM5320_DEFAULT_TIMEOUT 8000
-
 static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
     AT_CellularNetwork::RegistrationModeDisable, // C_EREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type.
     AT_CellularNetwork::RegistrationModeLAC, // C_GREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type.
@@ -25,7 +23,7 @@ static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
 // 2. Enable IPv6, when AT_CellularContext::set_new_context is fixed. (current implementation use dual IPV4V6 stack if IPV4 and IPV6 is supported,
 //    but IPV4V6 isn't)
 // 3. We can choose only one: C_EREG, C_GREG or C_REG otherwise, AT_CellularDevice and CellularStateMachine can cause "reset" action
-//    if one of them is registered, but other isn't. As result, ``CellularContext::connect`` won't work.
+//    if one of them is registered, but other isn't. As result, ``CellularContext::connect`` doesn't work in this case.
 
 SIM5320CellularDevice::SIM5320CellularDevice(FileHandle *fh)
     : AT_CellularDevice(fh)
@@ -50,7 +48,9 @@ nsapi_error_t SIM5320CellularDevice::init_at_interface()
     _at->flush();
     _at->cmd_start("ATE0"); // echo off
     _at->cmd_stop_read_resp();
-    SIM5320_UNLOCK_RETURN_IF_ERROR(_at);
+    if (_at->get_last_error()) {
+        return _at->get_last_error();
+    }
     // check AT command response
     if ((err = is_ready())) {
         return err;
@@ -88,6 +88,14 @@ nsapi_error_t SIM5320CellularDevice::get_power_level(int &func_level)
         func_level = result;
     }
     return _at->get_last_error();
+}
+
+void SIM5320CellularDevice::set_timeout(int timeout)
+{
+    if (timeout < SIM5320_DEFAULT_TIMEOUT) {
+        timeout = SIM5320_DEFAULT_TIMEOUT;
+    }
+    AT_CellularDevice::set_timeout(timeout);
 }
 
 nsapi_error_t SIM5320CellularDevice::init()

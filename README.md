@@ -1,6 +1,6 @@
 # SIM5320 interface library
 
-The library contains an SIM5320 driver for mbed-os.
+The SIM5320 driver library for mbed-os.
 
 ![SIM5320 board](images/board.jpg)
 
@@ -13,25 +13,33 @@ The SIM5320 documentation can be found here:
 The library allows:
 
 - get GPS coordinates and current UTC time
-- send SMS
+- send/receive SMS
 - resolve host names
 - establish TCP connections
 - establish UPD connections
-- upload files to FTP/FTPS servers
+- work with FTP/FTPS servers
+
+The library is compatible with a mbed-os 5.12 or higher.
 
 ## Driver usage
 
 Typical library usage consists of the following steps:
 
-1. create `SIM5320` driver instances;
-2. invoke `init` method. This method checks that device works, and sets some default settings;
-3. invoke `start` method to activate device function. By default SIM5320 is in the minimal functionality mode 
-   to reduce power consumption. The `init` method also switches SIM5320 to minimal functionality mode explicitly.
-4. Enable and use device functions (GPS/network/sms).
-5. If device isn't needed, it's recommended to invoke `stop` method. It will switch SIM5320 to minimal functionality mode
-   to reduce power consumption.
+1. Initialization:
+   
+   1. create `SIM5320` driver instances;
+   2. optionally invoke `SIM5320::reset` method to reset device.
+   3. invoke `SIM5320::init`. This method checks that device works, and sets some default settings;
 
-The examples of the GPS/network/sms usage can be found in the `examples` directory.
+2. Usage:
+
+   1. invoke `SIM5320::request_to_start` or `SIM5320CellularDevice::init` method directly;
+      It will set the device into full functionality mode.
+   2. use GPS/network to do some things
+   3. invoke `SIM5320::request_to_stop` or `SIM5320CellularDevice::shutdown` method directly.
+      It will set device into low power mode. But in this mode it cannot use network or GPS;
+
+The examples of the GPS/FTP/network/sms usage can be found in the `examples` directory.
 
 ## Troubleshooting
 
@@ -44,7 +52,3 @@ you can reset device to factory settings, using the following steps:
    commands to check if it's AT command interface.
 3. send `AT&F1` command to reset device to factory settings;
 4. restart device manually.
-
-## TODO:
-
-- fix SMS functionality to process long messages

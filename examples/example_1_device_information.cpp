@@ -1,7 +1,7 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * This example shows common device information (a SIM card can be inserted optionally).
+ * This example shows common device information.
  *
  * Pin map:
  *
@@ -17,17 +17,18 @@
 
 using namespace sim5320;
 
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+#define CHECK_RET_CODE(expr)                                                           \
+    {                                                                                  \
+        int err = expr;                                                                \
+        if (err < 0) {                                                                 \
+            char err_msg[64];                                                          \
+            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
+            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
+        }                                                                              \
     }
 
 DigitalOut led(LED2);
 
-// simple led demo
 int main()
 {
     // create driver
@@ -42,7 +43,7 @@ int main()
     int err;
     CellularInformation *cellular_information = sim5320.get_information();
 
-    printf("Cellular device information");
+    printf("Cellular device information:\n");
     CHECK_RET_CODE(cellular_information->get_manufacturer(buf, buf_size));
     printf("  - manufacturer:           %s\n", buf);
     CHECK_RET_CODE(cellular_information->get_model(buf, buf_size));

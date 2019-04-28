@@ -1,12 +1,18 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows UDP usage.
+ * The example of the UDP usage. It shows current time using NTP protocol.
+ *
+ * Requirements:
+ *
+ * - active SIM card with an internet access
  *
  * Pin map:
  *
  * - PB_10 - UART TX (SIM5320E)
  * - PB_11 - UART RX (SIM5320E)
+ *
+ * Note: to run the example, you should an adjust APN settings in the code.
  */
 
 #include "mbed.h"
@@ -18,12 +24,14 @@
 using namespace sim5320;
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+#define CHECK_RET_CODE(expr)                                                           \
+    {                                                                                  \
+        int err = expr;                                                                \
+        if (err < 0) {                                                                 \
+            char err_msg[64];                                                          \
+            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
+            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
+        }                                                                              \
     }
 
 DigitalOut led(LED2);
@@ -175,11 +183,6 @@ time_t get_current_time(NetworkInterface *iface, const char *ntp_server_address,
     return (time_t)seconds_since_1900 - TIME1970;
 }
 
-/**
- * The UDP demo.
- *
- * It shows current time using NTP protocol.
- */
 int main()
 {
     // create driver
@@ -195,6 +198,7 @@ int main()
 
     // set credential
     //context->set_sim_pin("1234");
+    // note: set your APN parameters
     context->set_credentials("internet.mts.ru", "mts", "mts");
     // connect to network
     CHECK_RET_CODE(context->connect()); // note: by default operations is blocking

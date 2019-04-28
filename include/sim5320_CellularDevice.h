@@ -47,6 +47,9 @@ public:
      */
     virtual nsapi_error_t get_power_level(int &func_level);
 
+    // CellularDevice
+    virtual void set_timeout(int timeout);
+
     // AT_CellularDevice
     virtual nsapi_error_t init();
 

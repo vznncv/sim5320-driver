@@ -27,14 +27,19 @@ nsapi_error_t SIM5320CellularNetwork::get_ciot_network_optimization_config(Cellu
     return NSAPI_ERROR_UNSUPPORTED;
 }
 
+#define SIM5320_DETACH_TIMEOUT 16000
+
+nsapi_error_t SIM5320CellularNetwork::detach()
+{
+    // note: add extra timeout for this operation
+    ATHandlerLocker locker(_at, SIM5320_DETACH_TIMEOUT);
+    return AT_CellularNetwork::detach();
+}
+
 nsapi_error_t SIM5320CellularNetwork::scan_plmn(CellularNetwork::operList_t &operators, int &ops_count)
 {
-    _at.lock();
-    _at.set_at_timeout(_OPERATORS_SCAN_TIMEOUT);
-    nsapi_error_t ret_code = AT_CellularNetwork::scan_plmn(operators, ops_count);
-    _at.restore_at_timeout();
-    _at.unlock();
-    return ret_code;
+    ATHandlerLocker locker(_at, _OPERATORS_SCAN_TIMEOUT);
+    return AT_CellularNetwork::scan_plmn(operators, ops_count);
 }
 
 nsapi_error_t SIM5320CellularNetwork::get_registration_params(CellularNetwork::RegistrationType type, CellularNetwork::registration_params_t &reg_params)
@@ -74,15 +79,15 @@ nsapi_error_t SIM5320CellularNetwork::get_active_access_technology(CellularNetwo
 {
     int rat_code;
     nsapi_error_t err;
+    ATHandlerLocker locker(_at);
 
-    _at.lock();
     _at.cmd_start("AT+CNSMOD?");
     _at.cmd_stop();
     _at.resp_start("+CNSMOD:");
     _at.skip_param();
     rat_code = _at.read_int();
     _at.resp_stop();
-    err = _at.unlock_return_error();
+    err = _at.get_last_error();
     if (err) {
         return err;
     }
@@ -98,11 +103,11 @@ nsapi_error_t SIM5320CellularNetwork::get_active_access_technology(CellularNetwo
 
 nsapi_error_t SIM5320CellularNetwork::set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::SIM5320PreferredRadioAccessTechnologyMode aop)
 {
-    _at.lock();
+    ATHandlerLocker locker(_at);
     _at.cmd_start("AT+CNMP=");
     _at.write_int(aop);
     _at.cmd_stop_read_resp();
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }
 
 nsapi_error_t SIM5320CellularNetwork::set_access_technology_impl(CellularNetwork::RadioAccessTechnology op_rat)

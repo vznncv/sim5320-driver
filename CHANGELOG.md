@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
-- Added TCP/UPD implementation
+- Implemented SMS API
+- Implemented TCP/UPD API
+- Implemented base Cellular API
 - Added API for GPS
 - Added API for FTP

@@ -3,10 +3,16 @@
  *
  * This example shows sms usage.
  *
+ *  Requirements:
+ *
+ * - active SIM card
+ *
  * Pin map:
  *
  * - PB_10 - UART TX (SIM5320E)
  * - PB_11 - UART RX (SIM5320E)
+ *
+ * Note: for this example you should manually set your subscriber number or it should be stored in the SIM memory.
  */
 
 #include "mbed.h"
@@ -55,6 +61,7 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     printf(" %s ", header);
     print_separator(right_sep, sep_r_n);
 }
+
 nsapi_error_t attach_to_network(SIM5320 *sim5320)
 {
     nsapi_error_t err = 0;
