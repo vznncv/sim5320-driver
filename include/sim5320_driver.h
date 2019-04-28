@@ -100,6 +100,13 @@ public:
      */
     nsapi_error_t request_to_stop();
 
+    /**
+     * Check and process URC messages.
+     *
+     * @return
+     */
+    nsapi_error_t process_urc();
+
     enum ResetMode {
         RESET_MODE_DEFAULT = 0,
         RESET_MODE_SOFT = 1,

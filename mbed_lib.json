@@ -17,6 +17,10 @@
             "help": "SIM pin. It it's is empty, then it's ignored. It should be used for library tests only",
             "value": "\"\""
         },
+        "test_sim_subscriber_number": {
+            "help": "The sim card subscriber number for SMS testing. The special value \"CNUM\" can be used to extract subscriber number from SIM card if it's available.",
+            "value": "\"CNUM\""
+        },
         "test_apn": {
             "help": "APN name. It should be used for library tests only",
             "value": "\"\""

@@ -161,6 +161,12 @@ nsapi_error_t SIM5320::request_to_stop()
     return err;
 }
 
+nsapi_error_t SIM5320::process_urc()
+{
+    _at->process_oob();
+    return NSAPI_ERROR_OK;
+}
+
 nsapi_error_t SIM5320::reset(SIM5320::ResetMode reset_mode)
 {
     int err;

@@ -46,20 +46,19 @@ nsapi_error_t SIM5320CellularDevice::init_at_interface()
 {
     nsapi_error_t err;
     // disable echo
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     _at->flush();
     _at->cmd_start("ATE0"); // echo off
     _at->cmd_stop_read_resp();
     SIM5320_UNLOCK_RETURN_IF_ERROR(_at);
     // check AT command response
     if ((err = is_ready())) {
-        _at->unlock();
         return err;
     }
     // disable STK function
     _at->cmd_start("AT+STK=0");
     _at->cmd_stop_read_resp();
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320CellularDevice::set_power_level(int func_level)
@@ -69,17 +68,17 @@ nsapi_error_t SIM5320CellularDevice::set_power_level(int func_level)
     if (func_level < 0 || func_level > 1) {
         return NSAPI_ERROR_PARAMETER;
     }
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     _at->cmd_start("AT+CFUN=");
     _at->write_int(func_level);
     _at->cmd_stop_read_resp();
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320CellularDevice::get_power_level(int &func_level)
 {
     int result;
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     _at->cmd_start("AT+CFUN?");
     _at->cmd_stop();
     _at->resp_start("+CFUN:");
@@ -88,7 +87,7 @@ nsapi_error_t SIM5320CellularDevice::get_power_level(int &func_level)
     if (!_at->get_last_error()) {
         func_level = result;
     }
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 nsapi_error_t SIM5320CellularDevice::init()
@@ -98,7 +97,7 @@ nsapi_error_t SIM5320CellularDevice::init()
         return err;
     }
     // disable STK function
-    _at->lock();
+    ATHandlerLocker locker(*_at);
     _at->cmd_start("AT+STK=0");
     _at->cmd_stop_read_resp();
 
@@ -112,7 +111,7 @@ nsapi_error_t SIM5320CellularDevice::init()
     _at->cmd_stop_read_resp();
     _at->cmd_start("AT+CGREG=0");
     _at->cmd_stop_read_resp();
-    return _at->unlock_return_error();
+    return _at->get_last_error();
 }
 
 SIM5320GPSDevice *SIM5320CellularDevice::open_gps(FileHandle *fh)
@@ -159,6 +158,68 @@ void SIM5320CellularDevice::close_ftp_client()
     }
 }
 
+#define SUBSCRIBER_NUMBER_INDEX 1
+
+nsapi_error_t SIM5320CellularDevice::get_subscriber_number(char *number)
+{
+    bool find_number = false;
+    int number_type;
+
+    ATHandlerLocker locker(*_at);
+    // active MSISDN memory
+    _at->cmd_start("AT+CPBS=");
+    _at->write_string("ON");
+    _at->cmd_stop_read_resp();
+
+    _at->cmd_start("AT+CNUM");
+    _at->cmd_stop();
+    _at->resp_start("+CNUM");
+    while (_at->info_resp()) {
+        if (find_number) {
+            // skip data
+            _at->skip_param(3);
+        } else {
+            // skip alpha
+            _at->skip_param();
+            // read number
+            _at->read_string(number, SUBSCRIBER_NUMBER_MAX_LEN);
+            // read type
+            number_type = _at->read_int();
+            // FIXME: use first valid entity
+            find_number = true;
+        }
+    }
+
+    // CNUM returns nothing
+    if (!find_number) {
+        number[0] = '\0';
+    }
+
+    return _at->get_last_error();
+}
+
+nsapi_error_t SIM5320CellularDevice::set_subscriber_number(const char *number)
+{
+    if (number == NULL) {
+        return NSAPI_ERROR_PARAMETER;
+    }
+
+    ATHandlerLocker locker(*_at);
+
+    // active MSISDN memory
+    _at->cmd_start("AT+CPBS=");
+    _at->write_string("ON");
+    _at->cmd_stop_read_resp();
+
+    // set subscriber number
+    _at->cmd_start("AT+CPBW=");
+    _at->write_int(SUBSCRIBER_NUMBER_INDEX);
+    _at->write_string(number);
+    _at->cmd_stop_read_resp();
+
+    return _at->get_last_error();
+}
+
 AT_CellularInformation *SIM5320CellularDevice::open_information_impl(ATHandler &at)
 {
     return new SIM5320CellularInformation(at);
@@ -176,8 +237,7 @@ AT_CellularContext *SIM5320CellularDevice::create_context_impl(ATHandler &at, co
 
 AT_CellularSMS *SIM5320CellularDevice::open_sms_impl(ATHandler &at)
 {
-    //return new SIM5320CellularSMS(at);
-    return NULL;
+    return new SIM5320CellularSMS(at);
 }
 
 SIM5320GPSDevice *SIM5320CellularDevice::open_gps_impl(ATHandler &at)

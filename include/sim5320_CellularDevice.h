@@ -74,6 +74,26 @@ public:
      */
     virtual void close_ftp_client();
 
+    static const size_t SUBSCRIBER_NUMBER_MAX_LEN = 16;
+
+    /**
+     * Get subscriber number.
+     *
+     * If subscriber isn't set, an empty string will be returned.
+     *
+     * @param number output buffer. It should have size at least SUBSCRIBER_NUMBER_MAX_LEN
+     * @return 0 on success, otherwise non-zero value
+     */
+    virtual nsapi_error_t get_subscriber_number(char *number);
+
+    /**
+     * Set default subscriber number.
+     *
+     * @param number
+     * @return
+     */
+    virtual nsapi_error_t set_subscriber_number(const char *number);
+
 protected:
     // AT_CellularDevice
     virtual AT_CellularInformation *open_information_impl(ATHandler &at);
