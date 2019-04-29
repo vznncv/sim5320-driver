@@ -89,20 +89,11 @@ int main()
     printf("Start ...\n");
     CHECK_RET_CODE(sim5320.request_to_start());
 
-    CellularContext *context = sim5320.get_context();
-    // set credential
-    //context->set_sim_pin("1234");
-    context->set_credentials("internet.mts.ru", "mts", "mts");
-    // connect to network
-    // note: this operation is optional
-    CHECK_RET_CODE(context->connect());
-    printf("The device has connected to network\n");
-
     // GPS demo
     SIM5320GPSDevice *gps = sim5320.get_gps();
-    CHECK_RET_CODE(gps->start());
+    CHECK_RET_CODE(gps->start(SIM5320GPSDevice::STANDALONE_MODE));
     // set desired GPS accuracy
-    CHECK_RET_CODE(gps->set_desired_accuracy(25));
+    CHECK_RET_CODE(gps->set_desired_accuracy(150));
     print_header("Start gps");
     SIM5320GPSDevice::gps_coord_t gps_coord;
     bool has_gps_coord = false;
@@ -128,8 +119,6 @@ int main()
     print_separator();
 
     printf("Stop ...\n");
-    CHECK_RET_CODE(gps->stop());
-    CHECK_RET_CODE(context->disconnect());
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 

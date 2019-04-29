@@ -107,7 +107,7 @@ nsapi_error_t SIM5320::stop_uart_hw_flow_ctrl()
 nsapi_error_t SIM5320::init()
 {
     nsapi_error_t err;
-    // check that UART works and perform basic uart configuration
+    // check that UART works and perform basic UART configuration
     if ((err = _device->init_at_interface())) {
         return err;
     }
@@ -117,7 +117,7 @@ nsapi_error_t SIM5320::init()
         return err;
     }
 
-    //    // set automatic radio access technology choosing
+    //    // set automatic radio access technology selection
     //    SIM5320CellularNetwork *sim5320_network = (SIM5320CellularNetwork *)_network;
     //    if ((err = sim5320_network->set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::PRA;TM_AUTOMATIC))) {
     //        return err;

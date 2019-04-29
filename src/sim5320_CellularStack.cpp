@@ -169,7 +169,7 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.write_int(sock_id);
     _at.cmd_stop();
     // get OK or ERROR (note: a URC code can appear before OK or ERROR)
-    // FIXME: without delay it can freeze if a UDP socket is used
+    // FIXME: without delay it can cause freezing if a UDP socket is used
     wait_ms(10);
     _at.resp_start("OK");
     _at.resp_stop();

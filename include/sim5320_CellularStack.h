@@ -5,6 +5,10 @@
 #include "mbed.h"
 
 namespace sim5320 {
+
+/**
+ * SIM5320 cellular stack implementation.
+ */
 class SIM5320CellularStack : public AT_CellularStack, private NonCopyable<SIM5320CellularStack> {
 public:
     SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type);
@@ -51,7 +55,7 @@ private:
      *  +CIPEVENT: NETWORK CLOSED
      * @endcode
      *
-     * that indicates that the network has been closed and user application should close all sockets.
+     * that indicates that a network has been closed and user application should close all sockets.
      */
     void _urc_cipevent();
     /**
@@ -61,7 +65,7 @@ private:
      * +IPCLOSE: <link_id>,<close_reason>
      * @endcode
      *
-     * that indicates socket has been closed.
+     * that indicates that a socket has been closed.
      */
     void _urc_ipclose();
     /**

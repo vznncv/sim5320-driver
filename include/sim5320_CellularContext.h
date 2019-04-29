@@ -3,10 +3,13 @@
 #include "AT_CellularContext.h"
 #include "mbed.h"
 #include "sim5320_CellularDevice.h"
+
 namespace sim5320 {
 
+/**
+ * SIM5320 cellular context implementation.
+ */
 class SIM5320CellularContext : public AT_CellularContext, private NonCopyable<SIM5320CellularContext> {
-
 public:
     SIM5320CellularContext(ATHandler &at, SIM5320CellularDevice *device, const char *apn = 0, bool cp_req = false, bool nonip_req = false);
     virtual ~SIM5320CellularContext();

@@ -697,15 +697,19 @@ nsapi_error_t SIM5320FTPClient::upload(const char *local_path, const char *remot
         return MBED_ERROR_EIO;
     }
 
-    upload_callback_t upload_callback = { .src_file = file };
-
-    err = put(remote_path, callback(&upload_callback, &upload_callback_t::fetch));
+    err = upload(file, remote_path);
 
     if (fclose(file)) {
         err = any_error(err, MBED_ERROR_EIO);
     }
 
     return err;
+}
+
+nsapi_error_t SIM5320FTPClient::upload(FILE *local_file, const char *remote_path)
+{
+    upload_callback_t upload_callback = { .src_file = local_file };
+    return put(remote_path, callback(&upload_callback, &upload_callback_t::fetch));
 }
 
 #define FTP_GET_DATA_WAIT_TIMEOUT 3000

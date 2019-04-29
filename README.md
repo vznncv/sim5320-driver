@@ -52,3 +52,12 @@ you can reset device to factory settings, using the following steps:
    commands to check if it's AT command interface.
 3. send `AT&F1` command to reset device to factory settings;
 4. restart device manually.
+
+## Tests
+
+To run library tests you should:
+
+1. create an empty test project
+2. connect modem to you board
+3. fill "sim5320-driver.test_*" settings in the you "mbed_app.json"
+4. run `mbed test --greentea --tests-by-name "sim5320-driver-tests-*"`

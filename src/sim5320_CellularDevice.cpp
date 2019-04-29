@@ -7,9 +7,9 @@
 using namespace sim5320;
 
 static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
-    AT_CellularNetwork::RegistrationModeDisable, // C_EREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type.
-    AT_CellularNetwork::RegistrationModeLAC, // C_GREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type.
-    AT_CellularNetwork::RegistrationModeDisable, // C_REG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type.
+    AT_CellularNetwork::RegistrationModeDisable, // C_EREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type?
+    AT_CellularNetwork::RegistrationModeLAC, // C_GREG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type?
+    AT_CellularNetwork::RegistrationModeDisable, // C_REG AT_CellularNetwork::RegistrationMode. What support modem has for this registration type?
     0, // 0 = not supported, 1 = supported. AT+CGSN without type is likely always supported similar to AT+GSN.
     1, // 0 = not supported, 1 = supported. Alternative is to support only ATD*99***<cid>#
     1, // 0 = not supported, 1 = supported. APN authentication AT commands supported
@@ -21,7 +21,7 @@ static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
 // notes:
 // 1. TODO: check PPP support
 // 2. Enable IPv6, when AT_CellularContext::set_new_context is fixed. (current implementation use dual IPV4V6 stack if IPV4 and IPV6 is supported,
-//    but IPV4V6 isn't)
+//    instead of IPv4 and IPv6 separately)
 // 3. We can choose only one: C_EREG, C_GREG or C_REG otherwise, AT_CellularDevice and CellularStateMachine can cause "reset" action
 //    if one of them is registered, but other isn't. As result, ``CellularContext::connect`` doesn't work in this case.
 

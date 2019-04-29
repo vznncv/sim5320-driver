@@ -202,7 +202,6 @@ void SIM5320CellularContext::_urc_netclose()
     int net_state = _at.read_int();
     if (!_at.get_last_error() && net_state == 0) {
         _is_net_opened = false;
-        // note: the disconnected
         call_network_cb(NSAPI_STATUS_DISCONNECTED);
     }
 }

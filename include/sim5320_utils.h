@@ -9,7 +9,7 @@ namespace sim5320 {
 static const int SIM5320_DEFAULT_TIMEOUT = 8000;
 
 /**
- * Helper function that to return first found error code.
+ * Helper function that returns first found error code.
  *
  * @param err_1
  * @param err_2
@@ -51,16 +51,16 @@ inline nsapi_error_t any_error(nsapi_error_t err_1, nsapi_error_t err_2)
  * but it can contain only "%i" and "%s" to read positive integer and string.
  *
  * @param at @c ATHandler object
+ * @param wait_response_after_ok if it's @c true, then wait response after "OK"
  * @param wait_response_after_error if it's @c true, then wait response after "ERROR", but ignore codes
- * @param wait_response_after_error if it's @c true, then wait response after "OK"
- * @param prefix command prefix
+ * @param prefix command prefix ("+CMD:")
  * @param format_string description of the arguments to read
  * @return number of successfully read arguments, or negative code in case of error.
  */
 int read_full_fuzzy_response(ATHandler &at, bool wait_response_after_ok, bool wait_response_after_error, const char *prefix, const char *format_string, ...);
 
 /**
- * Version of the @c read_full_fuzzy_response with a variable list argument.
+ * Version of the @c read_full_fuzzy_response with a @c va_list argument.
  *
  * @param at
  * @param wait_response_after_error
@@ -73,8 +73,6 @@ int vread_full_fuzzy_response(ATHandler &at, bool wait_response_after_ok, bool w
 
 /**
  * Helper object to lock @c ATHandler object using RAII approach.
- *
- * @brief The ATHandlerLock class
  */
 class ATHandlerLocker {
 public:

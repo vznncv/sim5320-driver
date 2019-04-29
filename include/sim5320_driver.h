@@ -16,10 +16,10 @@ public:
     /**
      * Constructor.
      *
-     * @param serial_ptr Serial interface.
+     * @param serial_ptr Serial interface
      * @param rts RTS pin of the Serial interface
      * @param cts CTS pin of the Serial interface
-     * @param rst hardware reset pin (will be used when reset command fails)
+     * @param rst hardware reset pin
      */
     SIM5320(UARTSerial *serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
     /**
@@ -29,7 +29,7 @@ public:
      * @param rx RX pin of the Serial interface
      * @param rts RTS pin of the Serial interface
      * @param cts CTS pin of the Serial interface
-     * @param rst hardware reset pin (will be used when reset command fails)
+     * @param rst hardware reset pin
      */
     SIM5320(PinName tx, PinName rx, PinName rts = NC, PinName cts = NC, PinName rst = NC);
 
@@ -120,14 +120,6 @@ public:
      * @return 0 on success, non-zero on failure
      */
     nsapi_error_t reset(ResetMode reset_mode = RESET_MODE_DEFAULT);
-
-    //    /**
-    //     * Wait till device is registered in the network
-    //     *
-    //     * @param timeout_ms maximal wait timeout
-    //     * @return 0 on success, non-zero on failure
-    //     */
-    //    nsapi_error_t wait_network_registration(int timeout_ms = 30000);
 
     /**
      * Check if module is run.

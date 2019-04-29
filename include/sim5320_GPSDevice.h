@@ -6,11 +6,17 @@
 
 namespace sim5320 {
 
+/**
+ * GPS API of the SIM5320
+ */
 class SIM5320GPSDevice : public AT_CellularBase, private NonCopyable<SIM5320GPSDevice> {
 public:
     SIM5320GPSDevice(ATHandler &at);
     virtual ~SIM5320GPSDevice();
 
+    /**
+     * Struct for GPS coordinates.
+     */
     struct gps_coord_t {
         // current longitude
         float longitude;
@@ -32,7 +38,7 @@ public:
      *
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t start(Mode gps_mode = UE_BASED_MODE);
+    nsapi_error_t start(Mode gps_mode = STANDALONE_MODE);
 
     /**
      * Stop GPS.

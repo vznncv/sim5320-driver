@@ -2,6 +2,7 @@
 #define SIM5320_CELLULARINFORMATION_H
 #include "AT_CellularInformation.h"
 #include "mbed.h"
+
 namespace sim5320 {
 
 class SIM5320CellularInformation : public AT_CellularInformation, private NonCopyable<SIM5320CellularInformation> {

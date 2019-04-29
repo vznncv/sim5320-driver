@@ -16,9 +16,6 @@
 using namespace utest::v1;
 using namespace sim5320;
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
 static sim5320::SIM5320 *modem;
 
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
@@ -26,7 +23,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX);
     modem->reset();
     // set PIN if we have it
-    const char *pin = TOSTRING(MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN);
+    const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
         modem->get_device()->set_pin(pin);
     }
@@ -52,6 +49,39 @@ static bool not_empty(const char *str)
     return strlen(str) > 0;
 }
 
+static nsapi_error_t attach_to_network(SIM5320 *sim5320)
+{
+    nsapi_error_t err = 0;
+    CellularNetwork::AttachStatus attach_status;
+    CellularNetwork *cellular_network = sim5320->get_network();
+
+    for (int i = 0; i < 10; i++) {
+        err = cellular_network->set_attach();
+        if (!err) {
+            break;
+        }
+        wait_ms(1000);
+    }
+    if (err) {
+        return err;
+    }
+
+    for (int i = 0; i < 30; i++) {
+        cellular_network->get_attach(attach_status);
+        if (attach_status == CellularNetwork::Attached) {
+            return NSAPI_ERROR_OK;
+        }
+        wait_ms(1000);
+    }
+    return NSAPI_ERROR_TIMEOUT;
+}
+
+static nsapi_error_t detach_from_network(SIM5320 *sim5320)
+{
+    CellularNetwork *cellular_network = sim5320->get_network();
+    return cellular_network->detach();
+}
+
 void test_network_regisration()
 {
     int err;
@@ -62,16 +92,8 @@ void test_network_regisration()
     err = modem->request_to_start();
     TEST_ASSERT_EQUAL(0, err);
     // attach to network
-    CellularNetwork::AttachStatus attach_status;
-    cellular_network->set_attach();
+    err = attach_to_network(modem);
     TEST_ASSERT_EQUAL(0, err);
-    for (int i = 0; i < 30; i++) {
-        cellular_network->get_attach(attach_status);
-        if (attach_status == CellularNetwork::Attached) {
-            break;
-        }
-        wait_ms(1000);
-    }
 
     // check registration parameter
     CellularNetwork::registration_params_t reg_param;
@@ -133,7 +155,7 @@ void test_network_regisration()
     }
 
     // detach from network
-    err = cellular_network->detach();
+    err = detach_from_network(modem);
     TEST_ASSERT_EQUAL(0, err);
     // stop modem (CellularDevise::shutdown)
     err = modem->request_to_stop();

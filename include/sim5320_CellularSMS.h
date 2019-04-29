@@ -4,6 +4,7 @@
 #include "mbed.h"
 
 namespace sim5320 {
+
 class SIM5320CellularSMS : public AT_CellularSMS, private NonCopyable<SIM5320CellularSMS> {
 public:
     SIM5320CellularSMS(ATHandler &at_handler);

@@ -71,7 +71,7 @@ void test_gps_usage()
     TEST_ASSERT_EQUAL(0, err);
 
     // set accuracy
-    const int desired_accuracy = 30;
+    const int desired_accuracy = 300;
     int actual_ccuracy;
     err = gps->set_desired_accuracy(desired_accuracy);
     TEST_ASSERT_EQUAL(0, err);

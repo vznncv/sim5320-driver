@@ -16,9 +16,6 @@
 using namespace utest::v1;
 using namespace sim5320;
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
 static sim5320::SIM5320 *modem;
 
 static int any_error(int err_1, int err_2)
@@ -35,7 +32,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     int err = 0;
     err = any_error(err, modem->reset());
     // set PIN if we have it
-    const char *pin = TOSTRING(MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN);
+    const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
         modem->get_device()->set_pin(pin);
     }
@@ -43,7 +40,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     err = any_error(err, modem->request_to_start());
     // connect to network
     CellularContext *cellular_context = modem->get_context();
-    cellular_context->set_credentials(TOSTRING(MBED_CONF_SIM5320_DRIVER_TEST_APN), TOSTRING(MBED_CONF_SIM5320_DRIVER_TEST_APN_USERNAME), TOSTRING(MBED_CONF_SIM5320_DRIVER_TEST_APN_PASSWORD));
+    cellular_context->set_credentials(MBED_CONF_SIM5320_DRIVER_TEST_APN, MBED_CONF_SIM5320_DRIVER_TEST_APN_USERNAME, MBED_CONF_SIM5320_DRIVER_TEST_APN_PASSWORD);
     err = any_error(err, cellular_context->connect());
 
     status_t res = greentea_test_setup_handler(number_of_cases);

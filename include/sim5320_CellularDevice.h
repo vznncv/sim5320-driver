@@ -65,6 +65,7 @@ public:
      * Close GPS device interface.
      */
     virtual void close_gps();
+
     /**
      * Open FTP client interface.
      *
@@ -72,6 +73,7 @@ public:
      * @return
      */
     virtual SIM5320FTPClient *open_ftp_client(FileHandle *fh);
+
     /**
      * Close FTP client interface.
      */
@@ -104,7 +106,6 @@ protected:
     virtual AT_CellularContext *create_context_impl(ATHandler &at, const char *apn, bool cp_req = false, bool nonip_req = false);
     virtual AT_CellularSMS *open_sms_impl(ATHandler &at);
 
-    // extra functions
     virtual SIM5320GPSDevice *open_gps_impl(ATHandler &at);
     virtual SIM5320FTPClient *open_ftp_client_impl(ATHandler &at);
 
