@@ -1,18 +1,12 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows FTP usage.
- *
- * Requirements:
- *
- * - active SIM card with an internet access
+ * The example shows GPS usage.
  *
  * Pin map:
  *
  * - PB_10 - UART TX (SIM5320E)
  * - PB_11 - UART RX (SIM5320E)
- *
- * Note: to run the example, you should an adjust APN settings in the code.
  */
 
 #include "mbed.h"
@@ -35,6 +29,21 @@ using namespace sim5320;
     }
 
 DigitalOut led(LED2);
+InterruptIn button(BUTTON1);
+
+struct {
+    volatile int counter;
+
+    void reset()
+    {
+        counter = 0;
+    }
+
+    void click()
+    {
+        counter++;
+    }
+} typedef click_detector_t;
 
 #define SEPARATOR_WIDTH 80
 
@@ -60,60 +69,56 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
+void print_time(time_t *time)
+{
+    tm parsed_time;
+    char str_buf[32];
+    gmtime_r(time, &parsed_time);
+    strftime(str_buf, 32, "%Y/%m/%d %H:%M:%S (UTC)", &parsed_time);
+    printf("%s", str_buf);
+}
+
 int main()
 {
     // create driver
     SIM5320 sim5320(PB_10, PB_11);
-    char buf[256];
-    const char *ftp_path = "ftp://ftp.yandex.ru";
-    const char *demo_dir = "/debian";
-    const char *demo_file = "/debian/README";
-
     // reset and initialize device
+    printf("Reset device ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
     CHECK_RET_CODE(sim5320.request_to_start());
 
-    CellularContext *context = sim5320.get_context();
-    // set credential
-    //context->set_sim_pin("1234");
-    // note: set your APN parameters
-    context->set_credentials("internet.mts.ru", "mts", "mts");
-    // connect to network
-    CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
-    printf("The device has connected to network\n");
+    // GPS demo
+    SIM5320GPSDevice *gps = sim5320.get_gps();
+    CHECK_RET_CODE(gps->start(SIM5320GPSDevice::STANDALONE_MODE));
+    // set desired GPS accuracy
+    CHECK_RET_CODE(gps->set_desired_accuracy(150));
+    print_header("Start gps");
+    SIM5320GPSDevice::gps_coord_t gps_coord;
+    bool has_gps_coord = false;
+    click_detector_t click_detector = { .counter = 0 };
+    button.rise(callback(&click_detector, &click_detector_t::click));
 
-    // 1. Connect to ftp folder
-    SIM5320FTPClient *ftp_client = sim5320.get_ftp_client();
-    printf("Connect to \"%s\" ...\n", ftp_path);
-    CHECK_RET_CODE(ftp_client->connect(ftp_path));
-    printf("Connected\n");
-
-    // 2. Change default location
-    CHECK_RET_CODE(ftp_client->set_cwd(demo_dir));
-
-    // 3. Show directory
-    SIM5320FTPClient::dir_entry_list_t dir_entry_list;
-    CHECK_RET_CODE(ftp_client->listdir(demo_dir, &dir_entry_list));
-    sprintf(buf, "list directory \"%s\"", demo_dir);
-    print_header(buf);
-    SIM5320FTPClient::dir_entry_t *dir_entry_ptr = dir_entry_list.get_head();
-    while (dir_entry_ptr != NULL) {
-        printf("- %s (%s)\n", dir_entry_ptr->name, dir_entry_ptr->d_type == DT_DIR ? "DIR" : "FILE");
-        dir_entry_ptr = dir_entry_ptr->next;
+    while (click_detector.counter == 0) {
+        gps->get_coord(has_gps_coord, gps_coord);
+        if (has_gps_coord) {
+            // print gps coordinates
+            printf("GPS data:\n");
+            printf("  - longitude: %.8f\n", gps_coord.longitude);
+            printf("  - latitude: %.8f\n", gps_coord.latitude);
+            printf("  - altitude: %.1f\n", gps_coord.altitude);
+            printf("  - timestamp: ");
+            print_time(&gps_coord.time);
+            printf("\n");
+        } else {
+            printf("Wait gps coordinates...\n");
+        }
+        wait_ms(5000);
     }
     print_separator();
 
-    // 4. read file
-    sprintf(buf, "File \"%s\"", demo_file);
-    print_header(buf);
-    CHECK_RET_CODE(ftp_client->download(demo_file, stdout));
-    print_separator();
-
     printf("Stop ...\n");
-    CHECK_RET_CODE(ftp_client->disconnect());
-    CHECK_RET_CODE(context->disconnect());
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 

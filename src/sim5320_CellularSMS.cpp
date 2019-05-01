@@ -1,10 +1,11 @@
 #include "sim5320_CellularSMS.h"
+#include "sim5320_utils.h"
 using namespace sim5320;
 
 #define CTRL_Z "\x1a"
 #define ESC "\x1b"
 
-SIM5320CellularSMS::SIM5320CellularSMS(ATHandler& at_handler)
+SIM5320CellularSMS::SIM5320CellularSMS(ATHandler &at_handler)
     : AT_CellularSMS(at_handler)
 {
 }
@@ -15,7 +16,7 @@ SIM5320CellularSMS::~SIM5320CellularSMS()
 
 #define SMS_CONFIRMATION_TIMEOUT 12000
 
-nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char* phone_number, const char* message, int msg_len)
+nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char *phone_number, const char *message, int msg_len)
 {
     // the standard AT_CellularSMS:send_sms remove sign +, but it cause error in case of SIM5320
     // so implement SMS sending for text mode
@@ -34,7 +35,8 @@ nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char* phone_number, con
         return NSAPI_ERROR_PARAMETER;
     }
 
-    _at.lock();
+    ATHandlerLocker locker(_at);
+
     _at.cmd_start("AT+CMGS=");
     _at.write_string(phone_number);
     _at.cmd_stop();
@@ -42,12 +44,11 @@ nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char* phone_number, con
     _at.resp_start("> ", true);
 
     if (!_at.get_last_error()) {
-        int write_size = _at.write_bytes((const uint8_t*)message, msg_len);
+        int write_size = _at.write_bytes((const uint8_t *)message, msg_len);
         if (write_size < msg_len) {
             // sending can be canceled by giving <ESC> character (IRA 27).
             _at.cmd_start(ESC);
             _at.cmd_stop();
-            _at.unlock();
             return write_size;
         }
         // <ctrl-Z> (IRA 26) must be used to indicate the ending of the message body.
@@ -59,12 +60,12 @@ nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char* phone_number, con
         _at.restore_at_timeout();
     }
 
-    err = _at.unlock_return_error();
+    err = _at.get_last_error();
 
     return (err == NSAPI_ERROR_OK) ? msg_len : err;
 }
 
-nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, char* phone_num, uint16_t phone_len, char* time_stamp, uint16_t time_len, int* buf_size)
+nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, char *phone_num, uint16_t phone_len, char *time_stamp, uint16_t time_len, int *buf_size)
 {
     CellularSMSMmode mode;
     nsapi_size_or_error_t err;
@@ -73,7 +74,7 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
     char phone_num_tmp[SMS_MAX_PHONE_NUMBER_SIZE];
     char time_stamp_tmp[SMS_MAX_TIME_STAMP_SIZE];
     char message_status[12];
-    int message_len;
+    int message_len = 0;
     char message_len_str[4];
 
     // validate buffer sizes already here to avoid any necessary function calls and locking of _at
@@ -81,7 +82,8 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
         return NSAPI_ERROR_PARAMETER;
     }
     if (buf_len < SMS_MAX_SIZE_GSM7_SINGLE_SMS_SIZE) {
-        return NSAPI_ERROR_PARAMETER;
+        *buf_size = SMS_MAX_SIZE_GSM7_SINGLE_SMS_SIZE;
+        return NSAPI_ERROR_NO_MEMORY;
     }
 
     err = get_sms_message_mode(mode);
@@ -97,7 +99,7 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
     strcpy(time_stamp, "");
     strcpy(message_status, "");
     strcpy(phone_num_tmp, "");
-    _at.lock();
+    ATHandlerLocker locker(_at);
     _at.cmd_start("AT+CMGL=\"ALL\"");
     _at.cmd_stop();
     _at.resp_start("+CMGL:");
@@ -117,11 +119,6 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
             _at.read_string(&time_stamp_tmp[len], SMS_MAX_TIME_STAMP_SIZE - len);
         }
         // get value of the last parameter (message length)
-        message_len = 0;
-        while (_at.read_string(message_len_str, 4) >= 0) {
-        }
-        char* end_ptr;
-        message_len = std::strtol(message_len_str, &end_ptr, 10);
         _at.consume_to_stop_tag();
 
         if (strcmp(time_stamp_tmp, time_stamp) > 0) {
@@ -130,18 +127,33 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
             strcpy(phone_num, phone_num_tmp);
             // read message
             // TODO: make better sms message processing
-            _at.read_bytes((uint8_t*)buf, message_len);
-            buf[message_len + 1] = '\0';
-            if (buf_size) {
-                *buf_size = 0;
+            char sym = '\0';
+            char prev_sym = '\0';
+            int buf_i = 0;
+            int read_code = 1;
+            while (sym != '\n' && prev_sym != '\r' && read_code == 1) {
+                prev_sym = sym;
+                read_code = _at.read_bytes((uint8_t *)&sym, 1);
+                if (buf_i < buf_len) {
+                    buf[buf_i] = sym;
+                    buf_i++;
+                }
             }
-            _at.consume_to_stop_tag();
+            // add '\0' to buffer
+            if (buf_i >= 2 && buf[buf_i - 2] == '\r' && buf[buf_i - 1] == '\n') {
+                buf[buf_i - 2] = '\0';
+            } else if (buf_i >= buf_len) {
+                buf[buf_i - 1] = '\0';
+            } else {
+                buf[buf_i] = '\0';
+            }
+
         } else {
             _at.consume_to_stop_tag();
         }
     }
 
-    err = _at.unlock_return_error();
+    err = _at.get_last_error();
     if (err) {
         return err;
     }
@@ -149,18 +161,18 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char* buf, uint16_t buf_len, c
         return -1;
     }
 
-    return err;
+    return message_len;
 }
 
-nsapi_error_t SIM5320CellularSMS::get_sms_message_mode(CellularSMS::CellularSMSMmode& mode)
+nsapi_error_t SIM5320CellularSMS::get_sms_message_mode(CellularSMS::CellularSMSMmode &mode)
 {
     int mode_code = 0;
-    _at.lock();
+    ATHandlerLocker locker(_at);
     _at.cmd_start("AT+CMGF?");
     _at.cmd_stop();
     _at.resp_start("+CMGF:");
     mode_code = _at.read_int();
     mode = mode_code == 1 ? CellularSMSMmodeText : CellularSMSMmodePDU;
     _at.resp_stop();
-    return _at.unlock_return_error();
+    return _at.get_last_error();
 }

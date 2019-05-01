@@ -1,3 +1,57 @@
 {
-  "name": "sim5320-driver"
+    "name": "sim5320-driver",
+    "config": {
+        "test_uart_rx": {
+            "help": "UART RX pin for sim5320. It should be used for library tests only",
+            "value": "PB_11"
+        },
+        "test_uart_tx": {
+            "help": "UART TX pin for sim5320. It should be used for library tests only",
+            "value": "PB_10"
+        },
+        "test_reset_pin": {
+            "help": "RESET pin of sim5320. SET to NC it isn't availible.It should be used for library tests only ",
+            "value": "PB_12"
+        },
+        "test_sim_pin": {
+            "help": "SIM pin. It it's is empty, then it's ignored. It should be used for library tests only",
+            "value": "\"\""
+        },
+        "test_sim_subscriber_number": {
+            "help": "The sim card subscriber number for SMS testing. The special value \"CNUM\" can be used to extract subscriber number from SIM card if it's available.",
+            "value": "\"CNUM\""
+        },
+        "test_apn": {
+            "help": "APN name. It should be used for library tests only",
+            "value": "\"\""
+        },
+        "test_apn_username": {
+            "help": "APN username. It should be used for library tests only",
+            "value": "\"\""
+        },
+        "test_apn_password": {
+            "help": "APN password. It should be used for library tests only",
+            "value": "\"\""
+        },
+        "test_ftp_connect_ftp_url": {
+            "help": "FTP URL to test ftp connection",
+            "value": "\"ftp://demo:password@test.rebex.net:21\""
+        },
+        "test_ftp_connect_ftps_explicit_url": {
+            "help": "FTP URL to test explicit ftps connection",
+            "value": "\"ftps://demo:password@test.rebex.net:21\""
+        },
+        "test_ftp_connect_ftps_implicit_url": {
+            "help": "FTP URL to test implicit ftps connection",
+            "value": "\"ftps+i://demo:password@test.rebex.net:990\""
+        },
+        "test_ftp_read_write_operations_url": {
+            "help": "FTP URL to test read operations. If it isn't set, tests will be skipped. A user should have a read/write permissions.",
+            "value": "\"\""
+        },
+        "test_ftp_read_write_operations_dir": {
+            "help": "FTP URL to test read operations",
+            "value": "\"/test\""
+        }
+    }
 }

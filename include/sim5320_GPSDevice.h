@@ -6,11 +6,17 @@
 
 namespace sim5320 {
 
+/**
+ * GPS API of the SIM5320
+ */
 class SIM5320GPSDevice : public AT_CellularBase, private NonCopyable<SIM5320GPSDevice> {
 public:
-    SIM5320GPSDevice(ATHandler& at);
+    SIM5320GPSDevice(ATHandler &at);
     virtual ~SIM5320GPSDevice();
 
+    /**
+     * Struct for GPS coordinates.
+     */
     struct gps_coord_t {
         // current longitude
         float longitude;
@@ -28,20 +34,11 @@ public:
     };
 
     /**
-     * Perform base GPS initialization.
-     *
-     * This method sets some default settings and switches off GPS if it's enabled.
-     *
-     * @return 0 on success, non-zero on failure
-     */
-    nsapi_error_t init();
-
-    /**
      * Run GPS.
      *
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t start(Mode gps_mode = UE_BASED_MODE);
+    nsapi_error_t start(Mode gps_mode = STANDALONE_MODE);
 
     /**
      * Stop GPS.
@@ -55,14 +52,14 @@ public:
      *
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t is_active(bool& active);
+    nsapi_error_t is_active(bool &active);
 
     /**
      * Get current GPS mode.
      *
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t get_mode(Mode& mode);
+    nsapi_error_t get_mode(Mode &mode);
 
     /**
      * Set desired GPS accuracy in meters.
@@ -78,7 +75,7 @@ public:
      * @param value
      * @return  0 on success, non-zero on failure
      */
-    nsapi_error_t get_desired_accuracy(int& value);
+    nsapi_error_t get_desired_accuracy(int &value);
 
     /**
      * Get current coordinate.
@@ -87,13 +84,12 @@ public:
      * @param coord structure that will be filled with coordinates
      * @return 0 on success, non-zero on failure
      */
-    nsapi_error_t get_coord(bool& has_coordinates, gps_coord_t& coord);
+    nsapi_error_t get_coord(bool &has_coordinates, gps_coord_t &coord);
 
 protected:
     // GPS assist server settings
-
-    const char* get_assist_server_url();
-    bool use_assist_server_ssl();
+    const virtual char *get_assist_server_url();
+    bool virtual use_assist_server_ssl();
 };
 }
 
