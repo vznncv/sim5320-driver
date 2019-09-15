@@ -5,8 +5,8 @@
  *
  * Pin map:
  *
- * - PB_10 - UART TX (SIM5320E)
- * - PB_11 - UART RX (SIM5320E)
+ * - PA_2 - UART TX (SIM5320E)
+ * - PA_3 - UART RX (SIM5320E)
  */
 
 #include "mbed.h"
@@ -32,7 +32,7 @@ DigitalOut led(LED2);
 int main()
 {
     // create driver
-    SIM5320 sim5320(PB_10, PB_11);
+    SIM5320 sim5320(PA_2, PA_3);
     // reset and initialize device
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());

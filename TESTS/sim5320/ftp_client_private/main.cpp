@@ -406,7 +406,7 @@ void test_info_functions()
     TEST_ASSERT_EQUAL_STRING(init_cwd, current_cwd);
 }
 
-void test_upload_donwload_file()
+void test_upload_download_file()
 {
     int err;
     FILE *file;
@@ -473,7 +473,7 @@ Case cases[] = {
     SIM5320Case(test_rmdir),
     SIM5320Case(test_rmtree),
     SIM5320Case(test_info_functions),
-    SIM5320Case(test_upload_donwload_file)
+    SIM5320Case(test_upload_download_file)
 
 };
 Specification specification(test_setup_handler, cases, test_teardown_handler);

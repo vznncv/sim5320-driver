@@ -2,6 +2,10 @@
 #include "mbed-trace/mbed_trace.h"
 #include "sim5320_utils.h"
 #include "string.h"
+
+#ifdef TRACE_GROUP
+#undef TRACE_GROUP
+#endif
 #define TRACE_GROUP "sim5320_ftp"
 
 using namespace sim5320;

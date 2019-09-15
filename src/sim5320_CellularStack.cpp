@@ -2,6 +2,9 @@
 #include "mbed-trace/mbed_trace.h"
 #include "sim5320_utils.h"
 
+#ifdef TRACE_GROUP
+#undef TRACE_GROUP
+#endif
 #define TRACE_GROUP "sim5320_cellular_stack"
 
 using namespace sim5320;
@@ -155,7 +158,6 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
     }
     tr_debug("socket.create, sock_id %d: created", sock_id);
 
-    socket->created = true;
     socket->started = true;
     socket->pending_bytes = 0;
     _active_sockets |= 0x0001 << sock_id;
