@@ -33,8 +33,7 @@ nsapi_error_t SIM5320CellularInformation::get_serial_number(char *buf, size_t bu
     case mbed::CellularInformation::IMEI:
         return _get_simcom_info("AT+CGSN", NULL, buf, buf_size);
 
-    case mbed::CellularInformation::IMEISV:
-    case mbed::CellularInformation::SVN:
+    default:
         return NSAPI_ERROR_UNSUPPORTED;
     }
 }
