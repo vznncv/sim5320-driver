@@ -7,21 +7,13 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
 
 using namespace utest::v1;
 using namespace sim5320;
-
-static int any_error(int err_1, int err_2)
-{
-    if (err_1) {
-        return err_1;
-        ;
-    }
-    return err_2;
-}
 
 static sim5320::SIM5320 *modem;
 
@@ -38,8 +30,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     // run modem
     err = any_error(err, modem->request_to_start());
 
-    status_t res = greentea_test_setup_handler(number_of_cases);
-    return err ? STATUS_ABORT : res;
+    return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }
 
 void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
@@ -92,7 +83,7 @@ void test_gps_usage()
         err = gps->get_coord(has_coordinates, gps_coord);
         TEST_ASSERT_EQUAL(0, err);
 
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
 
     // stop gps
@@ -114,6 +105,9 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+
     // host handshake
     // note: it should be invoked here or in the test_setup_handler
     GREENTEA_SETUP(100, "default_auto");

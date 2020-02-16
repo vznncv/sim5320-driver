@@ -151,6 +151,9 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
         return NSAPI_ERROR_UNSUPPORTED;
     }
     nsapi_error_t err = _at.get_last_error();
+    if (link_num != sock_id) {
+        tr_error("socket.create, sock_id %d: link number %d differs from socket id %d", sock_id, link_num, sock_id);
+    }
 
     if (err || open_code != 0) {
         tr_debug("socket.create, sock_id %d: fail to create, err = %d, open_code = %d", sock_id, err, open_code);
@@ -172,7 +175,7 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.cmd_stop();
     // get OK or ERROR (note: a URC code can appear before OK or ERROR)
     // FIXME: without delay it can cause freezing if a UDP socket is used
-    wait_ms(10);
+    ThisThread::sleep_for(10);
     _at.resp_start("OK");
     _at.resp_stop();
 
@@ -279,9 +282,9 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
     nsapi_error_t err;
     nsapi_size_or_error_t result;
     int mode;
-    int link_id;
-    int read_len;
-    int rest_len;
+    int link_id = -1;
+    int read_len = 0;
+    int rest_len = 0;
 
     int sock_id = socket->id;
     tr_debug("socket.recv, sock_id %d: receive data ...", sock_id);

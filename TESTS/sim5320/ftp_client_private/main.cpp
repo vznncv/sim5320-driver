@@ -12,6 +12,7 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
@@ -20,23 +21,6 @@
 
 using namespace utest::v1;
 using namespace sim5320;
-
-static int any_error(int err_1, int err_2)
-{
-    if (err_1) {
-        return err_1;
-    }
-    return err_2;
-}
-
-#define ABORT_IF_ERROR(expr)                          \
-    {                                                 \
-        int err = expr;                               \
-        greentea_test_setup_handler(number_of_cases); \
-        if (err) {                                    \
-            return STATUS_ABORT;                      \
-        }                                             \
-    }
 
 static sim5320::SIM5320 *modem;
 static FileSystem *fs;
@@ -82,6 +66,15 @@ static int prepare_test_dir(SIM5320FTPClient *ftp_client, const char *test_dir)
     return err;
 }
 
+#define ABORT_TEST_SETUP_HANDLER_IF_ERROR(expr)           \
+    do {                                                  \
+        int err = expr;                                   \
+        if (err) {                                        \
+            greentea_test_setup_handler(number_of_cases); \
+            return STATUS_ABORT;                          \
+        }                                                 \
+    } while (0);
+
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     // ignore tests if FTP URL isn't set
@@ -90,29 +83,29 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     }
 
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
-    ABORT_IF_ERROR(modem->reset());
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->reset());
     modem->init();
-    wait_ms(500);
+    ThisThread::sleep_for(500);
     // set PIN if we have it
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
         modem->get_device()->set_pin(pin);
     }
     // run modem
-    ABORT_IF_ERROR(modem->request_to_start());
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->request_to_start());
 
     // connect to network
     CellularContext *cellular_context = modem->get_context();
     cellular_context->set_credentials(MBED_CONF_SIM5320_DRIVER_TEST_APN, MBED_CONF_SIM5320_DRIVER_TEST_APN_USERNAME, MBED_CONF_SIM5320_DRIVER_TEST_APN_PASSWORD);
-    ABORT_IF_ERROR(cellular_context->connect());
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(cellular_context->connect());
 
     ftp_client = modem->get_ftp_client();
 
     // connect to ftp server
-    ABORT_IF_ERROR(ftp_client->connect(MBED_CONF_SIM5320_DRIVER_TEST_FTP_READ_WRITE_OPERATIONS_URL));
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(ftp_client->connect(MBED_CONF_SIM5320_DRIVER_TEST_FTP_READ_WRITE_OPERATIONS_URL));
 
     // prepare test directory
-    ABORT_IF_ERROR(prepare_test_dir(ftp_client, test_dir));
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(prepare_test_dir(ftp_client, test_dir));
 
     // create test file system
     block_device = new HeapBlockDevice(5120, 128);
@@ -277,7 +270,7 @@ void test_rmtree()
     sprintf(path_buf, "%s/%s/%s", test_dir, "some_dir", "f1.txt");
     err = ftp_client->put(path_buf, (uint8_t *)"1", 1);
     TEST_ASSERT_EQUAL(0, err);
-    sprintf(path_buf, "%s/%s/%s/%d", test_dir, "some_dir", "d1", "f2.txt");
+    sprintf(path_buf, "%s/%s/%s/%s", test_dir, "some_dir", "d1", "f2.txt");
     err = ftp_client->put(path_buf, (uint8_t *)"2", 1);
     TEST_ASSERT_EQUAL(0, err);
 
@@ -481,6 +474,10 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+    validate_test_ftp_settings(false, true);
+
     // host handshake
     // note: it should be invoked here or in the test_setup_handler
     GREENTEA_SETUP(300, "default_auto");

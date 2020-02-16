@@ -442,7 +442,7 @@ struct listdir_callback_t {
     SIM5320FTPClient::dir_entry_list_t *dir_entry_list;
     static const size_t MAX_WORD_SIZE = 63;
     char word_buf[MAX_WORD_SIZE];
-    int word_i;
+    size_t word_i;
     char current_d_type;
     bool line_start;
 
@@ -525,7 +525,6 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
 
     ssize_t block_size = 1;
     int data_writer_error = 0;
-    bool data_writer_invalid_ret_val = false;
     int pending_data_i = PUT_UNSEND_MAX + 1;
 
     while (true) {
@@ -548,7 +547,7 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
                     break;
                 }
                 if (pending_data_i > PUT_UNSEND_MIN) {
-                    wait_ms(FTP_PUT_DATA_WAIT_TIMEOUT);
+                    ThisThread::sleep_for(FTP_PUT_DATA_WAIT_TIMEOUT);
                 } else {
                     break;
                 }
@@ -564,9 +563,9 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
         if (block_size <= 0) {
             // finish transmission
             // if block_size < 0, it will be considered as error code
-            data_writer_invalid_ret_val = block_size;
+            data_writer_error = block_size;
             break;
-        } else if (block_size > BUFFER_SIZE) {
+        } else if ((size_t)block_size > BUFFER_SIZE) {
             // user error
             data_writer_error = NSAPI_ERROR_PARAMETER;
             break;
@@ -603,26 +602,32 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
 }
 
 namespace sim5320 {
-typedef struct {
+struct buffer_reader_t {
     uint8_t *src_buf;
     size_t src_len;
     size_t i;
 
+    buffer_reader_t(uint8_t *src_buf, size_t src_len, size_t i)
+        : src_buf(src_buf)
+        , src_len(src_len)
+        , i(i)
+    {
+    }
+
     ssize_t read(uint8_t *buf, size_t len)
     {
-        int not_sent_len = src_len - i;
+        size_t not_sent_len = src_len - i;
         size_t transfer_size = len < not_sent_len ? len : not_sent_len;
         memcpy(buf, src_buf + i, transfer_size);
         i += transfer_size;
-        return transfer_size;
+        return (ssize_t)transfer_size;
     }
-
-} buffer_reader_t;
+};
 }
 
 nsapi_error_t SIM5320FTPClient::put(const char *path, uint8_t *buf, size_t len)
 {
-    buffer_reader_t buffer_reader = { .src_buf = buf, .src_len = len, .i = 0 };
+    buffer_reader_t buffer_reader(buf, len, 0);
     return put(path, callback(&buffer_reader, &buffer_reader_t::read));
 }
 
@@ -634,6 +639,11 @@ nsapi_error_t SIM5320FTPClient::get(const char *path, Callback<ssize_t(uint8_t *
 namespace sim5320 {
 struct download_callback_t {
     FILE *dst_file;
+
+    download_callback_t(FILE *dst_file)
+        : dst_file(dst_file)
+    {
+    }
 
     ssize_t store(uint8_t *buf, size_t len)
     {
@@ -667,13 +677,18 @@ nsapi_error_t SIM5320FTPClient::download(const char *remote_path, const char *lo
 
 nsapi_error_t SIM5320FTPClient::download(const char *remote_path, FILE *local_file)
 {
-    download_callback_t donwload_callback = { .dst_file = local_file };
+    download_callback_t donwload_callback(local_file);
     return get(remote_path, callback(&donwload_callback, &download_callback_t::store));
 }
 
 namespace sim5320 {
 struct upload_callback_t {
     FILE *src_file;
+
+    upload_callback_t(FILE *src_file)
+        : src_file(src_file)
+    {
+    }
 
     ssize_t fetch(uint8_t *buf, size_t len)
     {
@@ -712,7 +727,7 @@ nsapi_error_t SIM5320FTPClient::upload(const char *local_path, const char *remot
 
 nsapi_error_t SIM5320FTPClient::upload(FILE *local_file, const char *remote_path)
 {
-    upload_callback_t upload_callback = { .src_file = local_file };
+    upload_callback_t upload_callback(local_file);
     return put(remote_path, callback(&upload_callback, &upload_callback_t::fetch));
 }
 
@@ -791,7 +806,7 @@ nsapi_error_t SIM5320FTPClient::_get_data_impl(const char *path, Callback<ssize_
                     processed_bytes += callback_res;
                 }
                 if (callback_res < 0) {
-                    tr_debug("callback returned %d. Stop data reading");
+                    tr_debug("callback returned %d. Stop data reading", callback_res);
                     break;
                 }
 
@@ -818,7 +833,7 @@ nsapi_error_t SIM5320FTPClient::_get_data_impl(const char *path, Callback<ssize_
                     break;
                 }
                 tr_debug("wait data ...");
-                wait_ms(FTP_GET_DATA_WAIT_TIMEOUT);
+                ThisThread::sleep_for(FTP_GET_DATA_WAIT_TIMEOUT);
             } else {
                 // end of transmission
                 tr_debug("Complete");

@@ -97,7 +97,7 @@ void SIM5320CellularContext::do_connect()
     // wait network
     timer.start();
     while (!_is_net_opened && timer.read_ms() < PDP_CONTEXT_ACTIVATION_TIMEOUT) {
-        wait_ms(PDP_STATUS_CHECK_DELAY);
+        ThisThread::sleep_for(PDP_STATUS_CHECK_DELAY);
         _check_netstate();
     }
     if (_is_net_opened) {
@@ -146,7 +146,7 @@ nsapi_error_t SIM5320CellularContext::disconnect()
         }
         if (_is_net_opened) {
             close_err_count++;
-            wait_ms(CLOSE_NETWORK_ERR_TIMEOUT);
+            ThisThread::sleep_for(CLOSE_NETWORK_ERR_TIMEOUT);
         } else {
             break;
         }

@@ -40,7 +40,7 @@ nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char *phone_number, con
     _at.cmd_start("AT+CMGS=");
     _at.write_string(phone_number);
     _at.cmd_stop();
-    wait_ms(2000);
+    ThisThread::sleep_for(2000);
     _at.resp_start("> ", true);
 
     if (!_at.get_last_error()) {
@@ -75,7 +75,6 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, c
     char time_stamp_tmp[SMS_MAX_TIME_STAMP_SIZE];
     char message_status[12];
     int message_len = 0;
-    char message_len_str[4];
 
     // validate buffer sizes already here to avoid any necessary function calls and locking of _at
     if ((phone_num && phone_len < SMS_MAX_PHONE_NUMBER_SIZE) || (time_stamp && time_len < SMS_MAX_TIME_STAMP_SIZE) || buf == NULL) {

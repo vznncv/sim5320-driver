@@ -12,21 +12,13 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
 
 using namespace utest::v1;
 using namespace sim5320;
-
-#define ABORT_IF_ERROR(expr)                          \
-    {                                                 \
-        int err = expr;                               \
-        greentea_test_setup_handler(number_of_cases); \
-        if (err) {                                    \
-            return STATUS_ABORT;                      \
-        }                                             \
-    }
 
 static sim5320::SIM5320 *modem;
 static CellularSMS *sms;
@@ -43,7 +35,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     if (err) {
         return err;
@@ -54,7 +46,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -65,33 +57,42 @@ static nsapi_error_t detach_from_network(SIM5320 *sim5320)
     return cellular_network->detach();
 }
 
+#define ABORT_TEST_SETUP_HANDLER_IF_ERROR(expr)           \
+    do {                                                  \
+        int err = expr;                                   \
+        if (err) {                                        \
+            greentea_test_setup_handler(number_of_cases); \
+            return STATUS_ABORT;                          \
+        }                                                 \
+    } while (0);
+
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     // initialize modem
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
-    ABORT_IF_ERROR(modem->reset());
-    modem->init();
-    wait_ms(500);
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->reset());
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->init());
+    ThisThread::sleep_for(500);
     // set PIN if we have it
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
         modem->get_device()->set_pin(pin);
     }
     // run modem
-    ABORT_IF_ERROR(modem->request_to_start());
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->request_to_start());
 
     // resolve subscriber number
     if (strcmp(MBED_CONF_SIM5320_DRIVER_TEST_SIM_SUBSCRIBER_NUMBER, "CNUM") == 0) {
         SIM5320CellularDevice *cellular_device = (SIM5320CellularDevice *)modem->get_device();
-        ABORT_IF_ERROR(cellular_device->get_subscriber_number(subscriber_number));
+        ABORT_TEST_SETUP_HANDLER_IF_ERROR(cellular_device->get_subscriber_number(subscriber_number));
     }
 
     // connect to network
-    ABORT_IF_ERROR(attach_to_network(modem));
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(attach_to_network(modem));
 
     // initialize SMS device
     sms = modem->get_sms();
-    ABORT_IF_ERROR(sms->initialize(CellularSMS::CellularSMSMmodeText));
+    ABORT_TEST_SETUP_HANDLER_IF_ERROR(sms->initialize(CellularSMS::CellularSMSMmodeText));
 
     return greentea_test_setup_handler(number_of_cases);
 }
@@ -164,6 +165,11 @@ struct sms_reader_t {
     static const uint16_t timestamp_buf_len = SMS_MAX_TIME_STAMP_SIZE;
     char timestamp_buf[timestamp_buf_len];
 
+    sms_reader_t(CellularSMS *sms)
+        : sms(sms)
+    {
+    }
+
     void clear()
     {
         strcpy(buf, "");
@@ -195,7 +201,7 @@ struct sms_reader_t {
 void test_sms_workflow()
 {
     nsapi_size_or_error_t err;
-    sms_reader_t sms_reader = { .sms = sms };
+    sms_reader_t sms_reader(sms);
     sms_reader.clear();
 
     // 1. delete all existed sms
@@ -224,7 +230,7 @@ void test_sms_workflow()
         if (sms_reader.sms_count > 0) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
 
     // 7. check sms
@@ -250,6 +256,9 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+
     // host handshake
     // note: it should be invoked here or in the test_setup_handler
     GREENTEA_SETUP(80, "default_auto");

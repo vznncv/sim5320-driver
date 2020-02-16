@@ -3,15 +3,15 @@
     "config": {
         "test_uart_rx": {
             "help": "UART RX pin for sim5320. It should be used for library tests only",
-            "value": "PA_3"
+            "value": "NC"
         },
         "test_uart_tx": {
             "help": "UART TX pin for sim5320. It should be used for library tests only",
-            "value": "PA_2"
+            "value": "NC"
         },
         "test_reset_pin": {
             "help": "RESET pin of sim5320. SET to NC it isn't availible.It should be used for library tests only ",
-            "value": "PA_1"
+            "value": "NC"
         },
         "test_sim_pin": {
             "help": "SIM pin. It it's is empty, then it's ignored. It should be used for library tests only",
