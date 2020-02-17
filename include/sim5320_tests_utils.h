@@ -96,6 +96,11 @@ inline bool not_empty(const char *str)
 {
     return strlen(str) > 0;
 }
+
+inline bool has_substring(const char *str, const char *sub_str)
+{
+    return strstr(str, sub_str) != NULL;
+}
 }
 
 #endif // SIM5320_TESTS_UTILS_H

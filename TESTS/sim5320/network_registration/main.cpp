@@ -45,11 +45,6 @@ utest::v1::status_t case_setup_handler(const Case *const source, const size_t in
     return unite_utest_status_with_err(greentea_case_setup_handler(source, index_of_case), err);
 }
 
-static bool not_empty(const char *str)
-{
-    return strlen(str) > 0;
-}
-
 static nsapi_error_t attach_to_network(SIM5320 *sim5320)
 {
     nsapi_error_t err = 0;

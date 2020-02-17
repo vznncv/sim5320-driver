@@ -7,10 +7,6 @@
  *
  * - active SIM card
  *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
  */
 
 #include "math.h"
@@ -20,6 +16,13 @@
 #include "time.h"
 
 using namespace sim5320;
+
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
 
 #define CHECK_RET_CODE(expr)                                                           \
     {                                                                                  \
@@ -44,7 +47,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     if (err) {
         return err;
@@ -55,7 +58,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -210,8 +213,9 @@ static void format_reg_params(char *buf, CellularNetwork::registration_params_t 
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
 
@@ -225,7 +229,9 @@ int main()
     CellularNetwork *cellular_network = sim5320.get_network();
 
     // set credential
-    //CHECK_RET_CODE(sim5320.get_device()->set_pin("1234"));
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
     // try to attach to network
     printf("Attach to network ...\n");
     CHECK_RET_CODE(attach_to_network(&sim5320));
@@ -288,7 +294,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

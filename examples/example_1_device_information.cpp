@@ -35,6 +35,7 @@ int main()
     // create driver
     SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
 

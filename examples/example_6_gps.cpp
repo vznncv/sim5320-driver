@@ -2,11 +2,6 @@
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
  * The example shows GPS usage.
- *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
  */
 
 #include "mbed.h"
@@ -16,6 +11,12 @@
 #include "sim5320_driver.h"
 
 using namespace sim5320;
+
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -31,8 +32,13 @@ using namespace sim5320;
 DigitalOut led(LED2);
 InterruptIn button(BUTTON1);
 
-struct {
+struct click_detector_t {
     volatile int counter;
+
+    click_detector_t(int counter = 0)
+        : counter(counter)
+    {
+    }
 
     void reset()
     {
@@ -43,7 +49,7 @@ struct {
     {
         counter++;
     }
-} typedef click_detector_t;
+};
 
 #define SEPARATOR_WIDTH 80
 
@@ -81,9 +87,9 @@ void print_time(time_t *time)
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
-    printf("Reset device ...\n");
+    printf("Initialize device ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
@@ -97,9 +103,10 @@ int main()
     print_header("Start gps");
     SIM5320GPSDevice::gps_coord_t gps_coord;
     bool has_gps_coord = false;
-    click_detector_t click_detector = { .counter = 0 };
+    click_detector_t click_detector;
     button.rise(callback(&click_detector, &click_detector_t::click));
 
+    printf("Wait gps coordinates. Click button to stop\n");
     while (click_detector.counter == 0) {
         gps->get_coord(has_gps_coord, gps_coord);
         if (has_gps_coord) {
@@ -114,7 +121,7 @@ int main()
         } else {
             printf("Wait gps coordinates...\n");
         }
-        wait_ms(5000);
+        ThisThread::sleep_for(5000);
     }
     print_separator();
 
@@ -123,7 +130,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

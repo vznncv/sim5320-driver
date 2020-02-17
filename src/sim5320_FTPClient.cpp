@@ -448,7 +448,7 @@ struct listdir_callback_t {
 
     ssize_t process(uint8_t *buf, size_t len)
     {
-        for (int i = 0; i < len; i++) {
+        for (size_t i = 0; i < len; i++) {
             char sym = buf[i];
             if (sym == ' ') {
                 // check <DIR> and skip word

@@ -7,11 +7,6 @@
  *
  * - active SIM card
  *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
- *
  * Note: for this example you should manually set your subscriber number or it should be stored in the SIM memory.
  */
 
@@ -23,9 +18,17 @@
 
 using namespace sim5320;
 
-// ===========================================================================================
-// Define your subscriber number or set "CNUM" to extract it from SIM card memory it it's set.
-// ===========================================================================================
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+/**
+ * SMS demo settings.
+ *
+ * Define your subscriber number or set "CNUM" to extract it from SIM card memory it it's set.
+ */
 #define SUBSCRIBER_NUMBER "CNUM"
 
 #define CHECK_RET_CODE(expr)                                                                              \
@@ -73,7 +76,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     if (err) {
         return err;
@@ -84,7 +87,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -109,6 +112,15 @@ struct sms_reader_t {
     // timestamp buffer
     static const uint16_t timestamp_buf_len = SMS_MAX_TIME_STAMP_SIZE;
     char timestamp_buf[timestamp_buf_len];
+
+    sms_reader_t(CellularSMS *sms, int sms_count = 0)
+        : sms(sms)
+        , sms_count(sms_count)
+    {
+        memset(buf, 0, buf_len);
+        memset(phone_num, 0, phone_num_len);
+        memset(timestamp_buf, 0, timestamp_buf_len);
+    }
 
     nsapi_size_or_error_t read_last_sms()
     {
@@ -143,8 +155,9 @@ struct sms_reader_t {
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
 
@@ -155,6 +168,11 @@ int main()
     CHECK_RET_CODE(attach_to_network(&sim5320));
 
     SIM5320CellularDevice *cellular_device = (SIM5320CellularDevice *)sim5320.get_device();
+
+    // set credential
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
 
     // get subscriber number
     char subscriber_number[SIM5320CellularDevice::SUBSCRIBER_NUMBER_MAX_LEN];
@@ -169,7 +187,7 @@ int main()
 
     // SMS demo
     CellularSMS *sms = sim5320.get_sms();
-    sms_reader_t sms_reader = { .sms = sms, .sms_count = 0 };
+    sms_reader_t sms_reader(sms, 0);
     char sms_message[128];
     uint32_t message_id = us_ticker_read() & 0xFF;
     sprintf(sms_message, "SIM5320 demo message (ID 0x%02X)", message_id);
@@ -196,7 +214,7 @@ int main()
         if (sms_reader.sms_count > 0) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     if (sms_reader.sms_count == 0) {
         printf("Fail. SMS isn't received!!!\n");
@@ -211,7 +229,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

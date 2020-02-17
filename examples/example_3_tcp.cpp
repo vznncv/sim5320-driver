@@ -7,12 +7,7 @@
  *
  * - active SIM card with an internet access
  *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
- *
- * Note: to run the example, you should an adjust APN settings in the code.
+ * Note: to run the example, you should an adjust APN settings.
  */
 
 #include "mbed.h"
@@ -22,6 +17,16 @@
 #include "sim5320_driver.h"
 
 using namespace sim5320;
+
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+#define MODEM_SIM_APN "internet.mts.ru"
+#define MODEM_SIM_APN_USERNAME "mts"
+#define MODEM_SIM_APN_PASSWORD "mts"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -146,13 +151,16 @@ void print_http_page(NetworkInterface *network, const char *host, int port, cons
         "Connection: close\r\n\r\n",
         page_path, host, port);
     print_header("Request");
-    printf(str_buff);
+    puts(str_buff);
     printf("\n");
     // open socket
     TCPSocket socket;
+    SocketAddress address;
+    CHECK_RET_CODE(network->gethostbyname(host, &address));
+    address.set_port(port);
     socket.set_timeout(2000);
     CHECK_RET_CODE(socket.open(network));
-    CHECK_RET_CODE(socket.connect(host, port));
+    CHECK_RET_CODE(socket.connect(address));
     // send request
     nsapi_size_t request_len = strlen(str_buff);
     nsapi_size_t i = 0;
@@ -188,9 +196,11 @@ void print_http_page(NetworkInterface *network, const char *host, int port, cons
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     char buf[256];
+    SocketAddress address;
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
@@ -200,9 +210,11 @@ int main()
     CellularContext *context = sim5320.get_context();
 
     // set credential
-    //context->set_sim_pin("1234");
-    // note: set your APN parameters
-    context->set_credentials("internet.mts.ru", "mts", "mts");
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
+    // set APN settings
+    context->set_credentials(MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD);
     // connect to network
     CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
     printf("The device has connected to network\n");
@@ -212,7 +224,8 @@ int main()
     CellularNetwork::registration_params_t reg_param;
     CHECK_RET_CODE(network->get_registration_params(CellularNetwork::C_GREG, reg_param));
     printf("  - registration status: %s/%s\n", get_reg_status_name(reg_param._status), get_radio_access_technology_name(reg_param._act));
-    printf("  - ip address: %s\n", context->get_ip_address());
+    CHECK_RET_CODE(context->get_ip_address(&address));
+    printf("  - ip address: %s\n", address.get_ip_address());
 
     // DNS demo
     print_header("DNS demo");
@@ -222,7 +235,6 @@ int main()
         "google.com",
         "example.com"
     };
-    SocketAddress address;
     for (int i = 0; i < host_num; i++) {
         context->gethostbyname(hosts[i], &address);
         printf("%s -> %s\n", hosts[i], address.get_ip_address());
@@ -238,7 +250,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

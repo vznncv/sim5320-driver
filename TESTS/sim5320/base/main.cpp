@@ -65,16 +65,6 @@ void test_init_state()
     TEST_ASSERT_EQUAL(0, err);
 }
 
-static bool has_substring(const char *str, const char *sub_str)
-{
-    return strstr(str, sub_str) != NULL;
-}
-
-static bool not_empty(const char *str)
-{
-    return strlen(str) > 0;
-}
-
 void test_cellular_info_manufacturer()
 {
     const size_t buf_size = 128;
