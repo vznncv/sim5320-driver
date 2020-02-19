@@ -3,15 +3,15 @@
     "config": {
         "test_uart_rx": {
             "help": "UART RX pin for sim5320. It should be used for library tests only",
-            "value": "PA_3"
+            "value": "NC"
         },
         "test_uart_tx": {
             "help": "UART TX pin for sim5320. It should be used for library tests only",
-            "value": "PA_2"
+            "value": "NC"
         },
         "test_reset_pin": {
             "help": "RESET pin of sim5320. SET to NC it isn't availible.It should be used for library tests only ",
-            "value": "PA_1"
+            "value": "NC"
         },
         "test_sim_pin": {
             "help": "SIM pin. It it's is empty, then it's ignored. It should be used for library tests only",
@@ -46,11 +46,11 @@
             "value": "\"ftps+i://demo:password@test.rebex.net:990\""
         },
         "test_ftp_read_write_operations_url": {
-            "help": "FTP URL to test read operations. If it isn't set, tests will be skipped. A user should have a read/write permissions.",
+            "help": "FTP URL to test write/read operations. If it isn't set, tests will be skipped. A user should have a read/write permissions.",
             "value": "\"\""
         },
         "test_ftp_read_write_operations_dir": {
-            "help": "FTP URL to test read operations",
+            "help": "FTP URL to test write/read operations",
             "value": "\"/test\""
         }
     }

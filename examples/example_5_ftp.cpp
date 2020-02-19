@@ -7,12 +7,7 @@
  *
  * - active SIM card with an internet access
  *
- * Pin map:
- *
- * - PB_10 - UART TX (SIM5320E)
- * - PB_11 - UART RX (SIM5320E)
- *
- * Note: to run the example, you should an adjust APN settings in the code.
+ * Note: to run the example, you should an adjust APN settings.
  */
 
 #include "mbed.h"
@@ -22,6 +17,22 @@
 #include "sim5320_driver.h"
 
 using namespace sim5320;
+
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+#define MODEM_SIM_APN "internet.mts.ru"
+#define MODEM_SIM_APN_USERNAME "mts"
+#define MODEM_SIM_APN_PASSWORD "mts"
+/**
+ * Test FTP server settings
+ */
+#define FTP_URL "ftp://ftp.yandex.ru"
+#define FTP_DEMO_DIR "/debian"
+#define FTP_DEMO_FILE "/debian/README"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -63,40 +74,41 @@ void print_header(const char *header, const char left_sep = '-', const char righ
 int main()
 {
     // create driver
-    SIM5320 sim5320(PB_10, PB_11);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     char buf[256];
-    const char *ftp_path = "ftp://ftp.yandex.ru";
-    const char *demo_dir = "/debian";
-    const char *demo_file = "/debian/README";
 
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
     CHECK_RET_CODE(sim5320.request_to_start());
 
     CellularContext *context = sim5320.get_context();
+
     // set credential
-    //context->set_sim_pin("1234");
-    // note: set your APN parameters
-    context->set_credentials("internet.mts.ru", "mts", "mts");
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
+    // set APN settings
+    context->set_credentials(MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD);
     // connect to network
     CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
     printf("The device has connected to network\n");
 
     // 1. Connect to ftp folder
     SIM5320FTPClient *ftp_client = sim5320.get_ftp_client();
-    printf("Connect to \"%s\" ...\n", ftp_path);
-    CHECK_RET_CODE(ftp_client->connect(ftp_path));
+    printf("Connect to \"%s\" ...\n", FTP_URL);
+    CHECK_RET_CODE(ftp_client->connect(FTP_URL));
     printf("Connected\n");
 
     // 2. Change default location
-    CHECK_RET_CODE(ftp_client->set_cwd(demo_dir));
+    CHECK_RET_CODE(ftp_client->set_cwd(FTP_DEMO_DIR));
 
     // 3. Show directory
     SIM5320FTPClient::dir_entry_list_t dir_entry_list;
-    CHECK_RET_CODE(ftp_client->listdir(demo_dir, &dir_entry_list));
-    sprintf(buf, "list directory \"%s\"", demo_dir);
+    CHECK_RET_CODE(ftp_client->listdir(FTP_DEMO_DIR, &dir_entry_list));
+    sprintf(buf, "list directory \"%s\"", FTP_DEMO_DIR);
     print_header(buf);
     SIM5320FTPClient::dir_entry_t *dir_entry_ptr = dir_entry_list.get_head();
     while (dir_entry_ptr != NULL) {
@@ -106,9 +118,9 @@ int main()
     print_separator();
 
     // 4. read file
-    sprintf(buf, "File \"%s\"", demo_file);
+    sprintf(buf, "File \"%s\"", FTP_DEMO_FILE);
     print_header(buf);
-    CHECK_RET_CODE(ftp_client->download(demo_file, stdout));
+    CHECK_RET_CODE(ftp_client->download(FTP_DEMO_FILE, stdout));
     print_separator();
 
     printf("Stop ...\n");
@@ -118,7 +130,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

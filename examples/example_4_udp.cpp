@@ -7,12 +7,7 @@
  *
  * - active SIM card with an internet access
  *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
- *
- * Note: to run the example, you should an adjust APN settings in the code.
+ * Note: to run the example, you should an adjust APN settings.
  */
 
 #include "mbed.h"
@@ -22,6 +17,16 @@
 #include "sim5320_driver.h"
 
 using namespace sim5320;
+
+/**
+ * Modem settings.
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+#define MODEM_SIM_APN "internet.mts.ru"
+#define MODEM_SIM_APN_USERNAME "mts"
+#define MODEM_SIM_APN_PASSWORD "mts"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -35,21 +40,6 @@ using namespace sim5320;
     }
 
 DigitalOut led(LED2);
-
-static const char *get_reg_mode_name(CellularNetwork::RegistrationType type)
-{
-
-    switch (type) {
-    case CellularNetwork::C_EREG:
-        return "C_EREG";
-    case CellularNetwork::C_GREG:
-        return "C_GREG";
-    case CellularNetwork::C_REG:
-        return "C_REG";
-    default:
-        return "Unknown error";
-    }
-}
 
 static const char *get_reg_status_name(CellularNetwork::RegistrationStatus status)
 {
@@ -162,11 +152,16 @@ time_t get_current_time(NetworkInterface *iface, const char *ntp_server_address,
     const int ntp_response_size = 48;
     char ntr_response[ntp_response_size] = { 0 };
     UDPSocket socket;
+    SocketAddress address;
     int response_size;
+
+    // prepare address
+    CHECK_RET_CODE(iface->gethostbyname(ntp_server_address, &address));
+    address.set_port(ntp_server_port);
 
     // send NTP request and get read response
     CHECK_RET_CODE(socket.open(iface));
-    CHECK_RET_CODE(socket.sendto(ntp_server_address, ntp_server_port, ntr_request, ntp_request_size));
+    CHECK_RET_CODE(socket.sendto(address, ntr_request, ntp_request_size));
     CHECK_RET_CODE(response_size = socket.recv(ntr_response, ntp_response_size));
     CHECK_RET_CODE(socket.close());
 
@@ -186,8 +181,10 @@ time_t get_current_time(NetworkInterface *iface, const char *ntp_server_address,
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
+    SocketAddress address;
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
@@ -197,9 +194,11 @@ int main()
     CellularContext *context = sim5320.get_context();
 
     // set credential
-    //context->set_sim_pin("1234");
-    // note: set your APN parameters
-    context->set_credentials("internet.mts.ru", "mts", "mts");
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
+    // set APN settings
+    context->set_credentials(MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD);
     // connect to network
     CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
     printf("The device has connected to network\n");
@@ -209,7 +208,8 @@ int main()
     CellularNetwork::registration_params_t reg_param;
     CHECK_RET_CODE(network->get_registration_params(CellularNetwork::C_GREG, reg_param));
     printf("  - registration status: %s/%s\n", get_reg_status_name(reg_param._status), get_radio_access_technology_name(reg_param._act));
-    printf("  - ip address: %s\n", context->get_ip_address());
+    CHECK_RET_CODE(context->get_ip_address(&address));
+    printf("  - ip address: %s\n", address.get_ip_address());
 
     // UDP demo
     const char *ntp_server_address = "2.pool.ntp.org";
@@ -227,7 +227,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }

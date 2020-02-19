@@ -275,10 +275,10 @@ nsapi_error_t SIM5320::_reset_hard()
     if (_rst_out_ptr) {
         // try using hardware pin
         _rst_out_ptr->write(0);
-        wait_ms(100);
+        ThisThread::sleep_for(100);
         _rst_out_ptr->write(1);
         // wait startup
-        wait_ms(200);
+        ThisThread::sleep_for(200);
         _at->flush();
         _at->clear_error();
         return _skip_initialization_messages();

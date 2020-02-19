@@ -59,7 +59,7 @@ nsapi_error_t SIM5320GPSDevice::start(SIM5320GPSDevice::Mode gps_mode)
         if (i >= GPS_START_STOP_CHECK_NUM) {
             return MBED_ERROR_CODE_TIME_OUT;
         }
-        wait_ms(GPS_START_STOP_CHECK_DELAY);
+        ThisThread::sleep_for(GPS_START_STOP_CHECK_DELAY);
     }
 
     return _at.get_last_error();
@@ -89,7 +89,7 @@ nsapi_error_t SIM5320GPSDevice::stop()
         if (i >= GPS_START_STOP_CHECK_NUM) {
             return MBED_ERROR_CODE_TIME_OUT;
         }
-        wait_ms(GPS_START_STOP_CHECK_DELAY);
+        ThisThread::sleep_for(GPS_START_STOP_CHECK_DELAY);
     }
 
     return _at.get_last_error();

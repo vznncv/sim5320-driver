@@ -9,6 +9,7 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
@@ -18,17 +19,10 @@ using namespace sim5320;
 
 static sim5320::SIM5320 *modem;
 
-static int any_error(int err_1, int err_2)
-{
-    if (err_1) {
-        return err_1;
-    }
-    return err_2;
-}
-
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
-    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX);
+    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
     int err = 0;
     err = any_error(err, modem->reset());
     // set PIN if we have it
@@ -43,8 +37,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     cellular_context->set_credentials(MBED_CONF_SIM5320_DRIVER_TEST_APN, MBED_CONF_SIM5320_DRIVER_TEST_APN_USERNAME, MBED_CONF_SIM5320_DRIVER_TEST_APN_PASSWORD);
     err = any_error(err, cellular_context->connect());
 
-    status_t res = greentea_test_setup_handler(number_of_cases);
-    return err ? STATUS_ABORT : res;
+    return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }
 
 void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
@@ -61,11 +54,6 @@ void test_teardown_handler(const size_t passed, const size_t failed, const failu
 utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     return greentea_case_setup_handler(source, index_of_case);
-}
-
-static bool not_empty(const char *str)
-{
-    return strlen(str) > 0;
 }
 
 void test_dns_usage()
@@ -87,8 +75,14 @@ void test_tcp_usage()
     int err;
     CellularContext *cellular_context = modem->get_context();
 
+    // resolve host address
     const char *host = "example.com";
     const int port = 80;
+    SocketAddress address;
+    err = cellular_context->gethostbyname(host, &address);
+    TEST_ASSERT_EQUAL(0, err);
+    address.set_port(port);
+    // prepare request
     char request[128];
     sprintf(request,
         "GET / HTTP/1.1\r\n"
@@ -101,7 +95,7 @@ void test_tcp_usage()
     socket.set_timeout(2000);
     err = socket.open(cellular_context);
     TEST_ASSERT_EQUAL(0, err);
-    err = socket.connect(host, port);
+    err = socket.connect(address);
     TEST_ASSERT_EQUAL(0, err);
 
     // send request
@@ -137,8 +131,11 @@ void test_udp_usage()
     int err;
     CellularContext *cellular_context = modem->get_context();
 
-    const char *ntp_server_address = "2.pool.ntp.org";
-    const int ntp_server_port = 123;
+    // resolve NTP server address
+    SocketAddress ntp_address;
+    err = cellular_context->gethostbyname("2.pool.ntp.org", &ntp_address);
+    TEST_ASSERT_EQUAL(0, err);
+    ntp_address.set_port(123);
 
     const time_t TIME1970 = (time_t)2208988800UL;
     const int ntp_request_size = 48;
@@ -159,7 +156,7 @@ void test_udp_usage()
     TEST_ASSERT_EQUAL(0, err);
 
     // send request
-    sent_bytes_num = socket.sendto(ntp_server_address, ntp_server_port, ntr_request, ntp_request_size);
+    sent_bytes_num = socket.sendto(ntp_address, ntr_request, ntp_request_size);
     TEST_ASSERT_EQUAL(ntp_request_size, sent_bytes_num);
 
     // read response
@@ -194,6 +191,10 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+    validate_test_apn_settings();
+
     // host handshake
     // note: should be invoked here or in the test_setup_handler
     GREENTEA_SETUP(80, "default_auto");

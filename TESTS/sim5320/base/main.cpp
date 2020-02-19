@@ -9,6 +9,7 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
@@ -20,9 +21,10 @@ static sim5320::SIM5320 *modem;
 
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
-    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX);
-    modem->reset();
-    return greentea_test_setup_handler(number_of_cases);
+    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
+    int err = modem->reset();
+    return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }
 
 void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
@@ -34,8 +36,24 @@ void test_teardown_handler(const size_t passed, const size_t failed, const failu
 utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     // reset modem
-    modem->init();
-    return greentea_case_setup_handler(source, index_of_case);
+    int err = modem->init();
+    return unite_utest_status_with_err(greentea_case_setup_handler(source, index_of_case), err);
+}
+
+void test_software_reset()
+{
+    int err = modem->reset(SIM5320::RESET_MODE_SOFT);
+    TEST_ASSERT_EQUAL(0, err);
+}
+
+void test_hardware_reset()
+{
+    if (MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN != NC) {
+        int err = modem->reset(SIM5320::RESET_MODE_HARD);
+        TEST_ASSERT_EQUAL(0, err);
+    } else {
+        TEST_IGNORE_MESSAGE("sim5320-driver.test_reset_pin isn't set. Skip test");
+    }
 }
 
 /**
@@ -46,16 +64,6 @@ void test_init_state()
     // check that init isn't failed
     int err = modem->init();
     TEST_ASSERT_EQUAL(0, err);
-}
-
-static bool has_substring(const char *str, const char *sub_str)
-{
-    return strstr(str, sub_str) != NULL;
-}
-
-static bool not_empty(const char *str)
-{
-    return strlen(str) > 0;
 }
 
 void test_cellular_info_manufacturer()
@@ -118,6 +126,8 @@ void test_cellular_info_serial_number_imei()
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, case_setup_handler, test_fun, greentea_case_teardown_handler, greentea_case_failure_continue_handler)
 Case cases[] = {
+    SIM5320Case(test_software_reset),
+    SIM5320Case(test_hardware_reset),
     SIM5320Case(test_init_state),
     SIM5320Case(test_cellular_info_manufacturer),
     SIM5320Case(test_cellular_info_model),
@@ -130,9 +140,12 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+
     // host handshake
     // note: should be invoked here or in the test_setup_handler
-    GREENTEA_SETUP(40, "default_auto");
+    GREENTEA_SETUP(80, "default_auto");
     // run tests
     return !Harness::run(specification);
 }

@@ -9,6 +9,7 @@
 #include "mbed.h"
 #include "rtos.h"
 #include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 #include "string.h"
 #include "unity.h"
 #include "utest.h"
@@ -20,15 +21,16 @@ static sim5320::SIM5320 *modem;
 
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
-    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX);
-    modem->reset();
-    // set PIN if we have it
+    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
+    int err = modem->reset();
+    // set PIN if it's specified
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
         modem->get_device()->set_pin(pin);
     }
 
-    return greentea_test_setup_handler(number_of_cases);
+    return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }
 
 void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
@@ -40,13 +42,8 @@ void test_teardown_handler(const size_t passed, const size_t failed, const failu
 utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     // reset modem
-    modem->init();
-    return greentea_case_setup_handler(source, index_of_case);
-}
-
-static bool not_empty(const char *str)
-{
-    return strlen(str) > 0;
+    int err = modem->init();
+    return unite_utest_status_with_err(greentea_case_setup_handler(source, index_of_case), err);
 }
 
 static nsapi_error_t attach_to_network(SIM5320 *sim5320)
@@ -60,7 +57,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     if (err) {
         return err;
@@ -71,7 +68,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        wait_ms(1000);
+        ThisThread::sleep_for(1000);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -172,6 +169,9 @@ Specification specification(test_setup_handler, cases, test_teardown_handler);
 // Entry point into the tests
 int main()
 {
+    // base config validation
+    validate_test_pins(true, true, false);
+
     // host handshake
     // note: should be invoked here or in the test_setup_handler
     GREENTEA_SETUP(180, "default_auto");

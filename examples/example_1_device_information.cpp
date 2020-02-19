@@ -2,11 +2,6 @@
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
  * This example shows common device information.
- *
- * Pin map:
- *
- * - PA_2 - UART TX (SIM5320E)
- * - PA_3 - UART RX (SIM5320E)
  */
 
 #include "mbed.h"
@@ -16,6 +11,12 @@
 #include "sim5320_driver.h"
 
 using namespace sim5320;
+
+/**
+ * Pin map
+ */
+#define MODEM_TX_PIN PD_8
+#define MODEM_RX_PIN PD_9
 
 #define CHECK_RET_CODE(expr)                                                           \
     {                                                                                  \
@@ -32,8 +33,9 @@ DigitalOut led(LED2);
 int main()
 {
     // create driver
-    SIM5320 sim5320(PA_2, PA_3);
+    SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
 
@@ -68,7 +70,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        wait(0.5);
+        ThisThread::sleep_for(500);
         led = !led;
     }
 }
