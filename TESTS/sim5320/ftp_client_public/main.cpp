@@ -30,6 +30,7 @@ static BlockDevice *block_device;
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
     int err = 0;
     err = any_error(err, modem->reset());
     // set PIN if we have it

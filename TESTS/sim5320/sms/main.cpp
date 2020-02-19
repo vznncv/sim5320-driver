@@ -70,8 +70,8 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     // initialize modem
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
     ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->reset());
-    ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->init());
     ThisThread::sleep_for(500);
     // set PIN if we have it
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;

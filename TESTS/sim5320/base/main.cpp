@@ -22,6 +22,7 @@ static sim5320::SIM5320 *modem;
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
     int err = modem->reset();
     return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }

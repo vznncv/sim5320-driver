@@ -46,11 +46,11 @@
             "value": "\"ftps+i://demo:password@test.rebex.net:990\""
         },
         "test_ftp_read_write_operations_url": {
-            "help": "FTP URL to test read operations. If it isn't set, tests will be skipped. A user should have a read/write permissions.",
+            "help": "FTP URL to test write/read operations. If it isn't set, tests will be skipped. A user should have a read/write permissions.",
             "value": "\"\""
         },
         "test_ftp_read_write_operations_dir": {
-            "help": "FTP URL to test read operations",
+            "help": "FTP URL to test write/read operations",
             "value": "\"/test\""
         }
     }

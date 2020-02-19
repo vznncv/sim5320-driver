@@ -21,7 +21,8 @@ static sim5320::SIM5320 *modem;
 
 utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
-    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX);
+    modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
+    modem->init();
     int err = modem->reset();
     // set PIN if it's specified
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
