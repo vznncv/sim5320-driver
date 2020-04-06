@@ -9,6 +9,7 @@
 #include "mbed.h"
 #include "sim5320_FTPClient.h"
 #include "sim5320_GPSDevice.h"
+#include "sim5320_TimeService.h"
 
 namespace sim5320 {
 
@@ -79,6 +80,19 @@ public:
      */
     virtual void close_ftp_client();
 
+    /**
+    * Open time service interface.
+    *
+    * @param fh
+    * @return
+    */
+    virtual SIM5320TimeService *open_time_service(FileHandle *fh);
+
+    /**
+    * Close time service interface.
+    */
+    virtual void close_time_service();
+
     static const size_t SUBSCRIBER_NUMBER_MAX_LEN = 16;
 
     /**
@@ -108,13 +122,54 @@ protected:
 
     virtual SIM5320GPSDevice *open_gps_impl(ATHandler &at);
     virtual SIM5320FTPClient *open_ftp_client_impl(ATHandler &at);
+    virtual SIM5320TimeService *open_time_service_impl(ATHandler &at);
 
 protected:
-    int _gps_ref_count;
-    int _ftp_client_ref_count;
+    /**
+     * Helper class to close and open interfaces.
+     */
+    template <class IterfaceType, IterfaceType *(SIM5320CellularDevice::*open_method_impl)(ATHandler &at)>
+    class DeviceInterfaceManager {
+    private:
+        int _ref_count;
+        IterfaceType *_interface;
 
-    SIM5320GPSDevice *_gps;
-    SIM5320FTPClient *_ftp_client;
+    public:
+        DeviceInterfaceManager()
+            : _ref_count(0)
+            , _interface(nullptr){};
+        ~DeviceInterfaceManager(){};
+
+        IterfaceType *open_interface(FileHandle *fh, SIM5320CellularDevice *device)
+        {
+            if (!_interface) {
+                _interface = (device->*open_method_impl)(*device->get_at_handler(fh));
+            }
+            _ref_count++;
+            return _interface;
+        };
+        void close_interface(SIM5320CellularDevice *device)
+        {
+            if (_interface) {
+                _ref_count--;
+                if (_ref_count <= 0) {
+                    ATHandler *atHandler = &_interface->get_at_handler();
+                    delete _interface;
+                    _interface = NULL;
+                    device->release_at_handler(atHandler);
+                }
+            }
+        }
+        void cleanup(SIM5320CellularDevice *device)
+        {
+            _ref_count = 1;
+            close_interface(device);
+        }
+    };
+
+    DeviceInterfaceManager<SIM5320GPSDevice, &SIM5320CellularDevice::open_gps_impl> _gps;
+    DeviceInterfaceManager<SIM5320FTPClient, &SIM5320CellularDevice::open_ftp_client_impl> _ftp_client;
+    DeviceInterfaceManager<SIM5320TimeService, &SIM5320CellularDevice::open_time_service_impl> _time_service;
 };
 }
 

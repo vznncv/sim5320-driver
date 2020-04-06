@@ -7,7 +7,7 @@
  *
  * - active SIM card with an internet access
  *
- * Note: to run the example, you should an adjust APN settings.
+ * Note: to run the example, you should adjust APN settings.
  */
 
 #include "mbed.h"

@@ -1,7 +1,7 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows FTP usage.
+ * The example of the TimeServer usage. It shows current time using requests to http servers.
  *
  * Requirements:
  *
@@ -27,12 +27,6 @@ using namespace sim5320;
 #define MODEM_SIM_APN "internet.mts.ru"
 #define MODEM_SIM_APN_USERNAME "mts"
 #define MODEM_SIM_APN_PASSWORD "mts"
-/**
- * Test FTP server settings
- */
-#define FTP_URL "ftp://ftp.yandex.ru"
-#define FTP_DEMO_DIR "/debian"
-#define FTP_DEMO_FILE "/debian/README"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -75,58 +69,27 @@ int main()
 {
     // create driver
     SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
-    char buf[256];
-
     // reset and initialize device
     printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
-    CHECK_RET_CODE(sim5320.request_to_start());
-
-    CellularContext *context = sim5320.get_context();
-
-    // set credential
-    if (strlen(MODEM_SIM_PIN) > 0) {
-        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
-    }
-    // set APN settings
-    context->set_credentials(MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD);
-    // connect to network
-    CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
+    CHECK_RET_CODE(sim5320.network_set_params(MODEM_SIM_PIN, MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD));
+    CHECK_RET_CODE(sim5320.network_up());
     printf("The device has connected to network\n");
 
-    // 1. Connect to ftp folder
-    SIM5320FTPClient *ftp_client = sim5320.get_ftp_client();
-    printf("Connect to \"%s\" ...\n", FTP_URL);
-    CHECK_RET_CODE(ftp_client->connect(FTP_URL));
-    printf("Connected\n");
-
-    // 2. Change default location
-    CHECK_RET_CODE(ftp_client->set_cwd(FTP_DEMO_DIR));
-
-    // 3. Show directory
-    SIM5320FTPClient::dir_entry_list_t dir_entry_list;
-    CHECK_RET_CODE(ftp_client->listdir(FTP_DEMO_DIR, &dir_entry_list));
-    sprintf(buf, "list directory \"%s\"", FTP_DEMO_DIR);
-    print_header(buf);
-    SIM5320FTPClient::dir_entry_t *dir_entry_ptr = dir_entry_list.get_head();
-    while (dir_entry_ptr != NULL) {
-        printf("- %s (%s)\n", dir_entry_ptr->name, dir_entry_ptr->d_type == DT_DIR ? "DIR" : "FILE");
-        dir_entry_ptr = dir_entry_ptr->next;
-    }
-    print_separator();
-
-    // 4. read file
-    sprintf(buf, "File \"%s\"", FTP_DEMO_FILE);
-    print_header(buf);
-    CHECK_RET_CODE(ftp_client->download(FTP_DEMO_FILE, stdout));
+    // check time service
+    print_header("time service demo");
+    SIM5320TimeService *time_service = sim5320.get_time_service();
+    printf("Sync time ...");
+    CHECK_RET_CODE(time_service->sync_time());
+    time_t current_time;
+    CHECK_RET_CODE(time_service->get_time(&current_time));
+    printf("Success. Current time: %s\n", ctime(&current_time));
     print_separator();
 
     printf("Stop ...\n");
-    CHECK_RET_CODE(ftp_client->disconnect());
-    CHECK_RET_CODE(context->disconnect());
-    CHECK_RET_CODE(sim5320.request_to_stop());
+    CHECK_RET_CODE(sim5320.network_down());
     printf("Complete!\n");
 
     while (1) {

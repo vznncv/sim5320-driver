@@ -46,8 +46,10 @@ void SIM5320::_init_driver()
     _context = _device->create_context(_serial_ptr);
     _gps = _device->open_gps(_serial_ptr);
     _ftp_client = _device->open_ftp_client(_serial_ptr);
+    _time_service = _device->open_time_service(_serial_ptr);
 
     _startup_request_count = 0;
+    _network_up_request_count = 0;
     _at = _device->get_at_handler(_serial_ptr);
 }
 
@@ -104,6 +106,12 @@ nsapi_error_t SIM5320::stop_uart_hw_flow_ctrl()
     return _at->get_last_error();
 }
 
+static const size_t DEFAULT_HTP_SERVERS_NUM = 2;
+static const char *const DEFAULT_HTP_SERVERS[DEFAULT_HTP_SERVERS_NUM] = {
+    "cloudflare.com:80",
+    "google.com:80"
+};
+
 nsapi_error_t SIM5320::init()
 {
     nsapi_error_t err;
@@ -116,6 +124,9 @@ nsapi_error_t SIM5320::init()
     if ((err = _device->set_power_level(0))) {
         return err;
     }
+
+    // configure http servers to synchronize time
+    _time_service->set_htp_servers(DEFAULT_HTP_SERVERS, DEFAULT_HTP_SERVERS_NUM);
 
     //    // set automatic radio access technology selection
     //    SIM5320CellularNetwork *sim5320_network = (SIM5320CellularNetwork *)_network;
@@ -156,6 +167,62 @@ nsapi_error_t SIM5320::request_to_stop()
     _startup_request_count--;
     if (_startup_request_count == 0) {
         err = _device->shutdown();
+    }
+    return err;
+}
+
+nsapi_error_t SIM5320::network_set_params(const char *pin, const char *apn_name, const char *apn_username, const char *apn_password)
+{
+    nsapi_error_t err = NSAPI_ERROR_OK;
+
+    if (pin != nullptr && strlen(pin) > 0) {
+        err = get_device()->set_pin(pin);
+        if (err) {
+            return err;
+        }
+    }
+    if (apn_name != nullptr && strlen(apn_name) > 0) {
+        get_context()->set_credentials(apn_name, apn_username, apn_password);
+    }
+
+    return err;
+}
+
+nsapi_error_t SIM5320::network_up()
+{
+    nsapi_error_t err = NSAPI_ERROR_OK;
+    if (_network_up_request_count == 0) {
+        // up device
+        err = request_to_start();
+        if (err) {
+            return err;
+        }
+        // up network
+        CellularContext *context = get_context();
+        err = context->connect();
+        if (err) {
+            request_to_stop();
+            return err;
+        }
+    }
+    _network_up_request_count++;
+    return err;
+}
+
+nsapi_error_t SIM5320::network_down()
+{
+    nsapi_error_t err = NSAPI_ERROR_OK;
+    if (_network_up_request_count <= 0) {
+        // invalid count
+        return -1;
+    }
+    _network_up_request_count--;
+    if (_network_up_request_count == 0) {
+        // stop network
+        CellularContext *context = get_context();
+        err = context->disconnect();
+        // stop device even an error occured
+        request_to_stop();
     }
     return err;
 }
@@ -250,6 +317,11 @@ SIM5320GPSDevice *SIM5320::get_gps()
 SIM5320FTPClient *SIM5320::get_ftp_client()
 {
     return _ftp_client;
+}
+
+SIM5320TimeService *SIM5320::get_time_service()
+{
+    return _time_service;
 }
 
 nsapi_error_t SIM5320::_reset_soft()

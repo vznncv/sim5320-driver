@@ -27,10 +27,6 @@ static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
 
 SIM5320CellularDevice::SIM5320CellularDevice(FileHandle *fh)
     : AT_CellularDevice(fh)
-    , _gps_ref_count(0)
-    , _ftp_client_ref_count(0)
-    , _gps(NULL)
-    , _ftp_client(NULL)
 {
     set_timeout(SIM5320_DEFAULT_TIMEOUT);
     AT_CellularBase::set_cellular_properties(cellular_properties);
@@ -38,6 +34,9 @@ SIM5320CellularDevice::SIM5320CellularDevice(FileHandle *fh)
 
 SIM5320CellularDevice::~SIM5320CellularDevice()
 {
+    _gps.cleanup(this);
+    _ftp_client.cleanup(this);
+    _time_service.cleanup(this);
 }
 
 nsapi_error_t SIM5320CellularDevice::init_at_interface()
@@ -124,46 +123,32 @@ nsapi_error_t SIM5320CellularDevice::init()
 
 SIM5320GPSDevice *SIM5320CellularDevice::open_gps(FileHandle *fh)
 {
-    if (!_gps) {
-        _gps = open_gps_impl(*get_at_handler(fh));
-    }
-    _gps_ref_count++;
-    return _gps;
+    return _gps.open_interface(fh, this);
 }
 
 void SIM5320CellularDevice::close_gps()
 {
-    if (_gps) {
-        _gps_ref_count--;
-        if (_gps_ref_count == 0) {
-            ATHandler *atHandler = &_gps->get_at_handler();
-            delete _gps;
-            _gps = NULL;
-            release_at_handler(atHandler);
-        }
-    }
+    _gps.close_interface(this);
 }
 
 SIM5320FTPClient *SIM5320CellularDevice::open_ftp_client(FileHandle *fh)
 {
-    if (!_ftp_client) {
-        _ftp_client = open_ftp_client_impl(*get_at_handler(fh));
-    }
-    _ftp_client_ref_count++;
-    return _ftp_client;
+    return _ftp_client.open_interface(fh, this);
 }
 
 void SIM5320CellularDevice::close_ftp_client()
 {
-    if (_ftp_client) {
-        _ftp_client_ref_count--;
-        if (_ftp_client_ref_count == 0) {
-            ATHandler *atHandler = &_ftp_client->get_at_handler();
-            delete _ftp_client;
-            _ftp_client = NULL;
-            release_at_handler(atHandler);
-        }
-    }
+    _ftp_client.close_interface(this);
+}
+
+SIM5320TimeService *SIM5320CellularDevice::open_time_service(FileHandle *fh)
+{
+    return _time_service.open_interface(fh, this);
+}
+
+void SIM5320CellularDevice::close_time_service()
+{
+    _time_service.close_interface(this);
 }
 
 #define SUBSCRIBER_NUMBER_INDEX 1
@@ -256,4 +241,9 @@ SIM5320GPSDevice *SIM5320CellularDevice::open_gps_impl(ATHandler &at)
 SIM5320FTPClient *SIM5320CellularDevice::open_ftp_client_impl(ATHandler &at)
 {
     return new SIM5320FTPClient(at);
+}
+
+SIM5320TimeService *SIM5320CellularDevice::open_time_service_impl(ATHandler &at)
+{
+    return new SIM5320TimeService(at);
 }

@@ -5,6 +5,7 @@
 #include "sim5320_CellularDevice.h"
 #include "sim5320_FTPClient.h"
 #include "sim5320_GPSDevice.h"
+#include "sim5320_TimeService.h"
 
 namespace sim5320 {
 
@@ -101,6 +102,31 @@ public:
     nsapi_error_t request_to_stop();
 
     /**
+     * Helper shortcut to set credentials, that are needed for network usage.
+     *
+     * @param pin sim card pin or either NULL or empty string if sim doesn't require a pin
+     * @param apn_name apn name or either NULL or empty string if apn settings shouldn't be changed
+     * @param apn_user apn username
+     * @param apn_password apn password
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t network_set_params(const char *pin = nullptr, const char *apn_name = nullptr, const char *apn_username = nullptr, const char *apn_password = nullptr);
+
+    /**
+     * Helper shortcut to start device and open network.
+     *
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t network_up();
+
+    /**
+     * Helper shortcut to close network and stop device.
+     *
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t network_down();
+
+    /**
      * Check and process URC messages.
      *
      * @return
@@ -177,6 +203,13 @@ public:
      */
     SIM5320FTPClient *get_ftp_client();
 
+    /**
+     * Get time service.
+     *
+     * @return
+     */
+    SIM5320TimeService *get_time_service();
+
 private:
     PinName _rts;
     PinName _cts;
@@ -193,8 +226,10 @@ private:
     CellularContext *_context;
     SIM5320GPSDevice *_gps;
     SIM5320FTPClient *_ftp_client;
+    SIM5320TimeService *_time_service;
 
     int _startup_request_count;
+    int _network_up_request_count;
     ATHandler *_at;
 
     static const int _STARTUP_TIMEOUT_MS = 32000;
