@@ -17,6 +17,10 @@
 #include "unity.h"
 #include "utest.h"
 
+#if not MBED_CONF_CELLULAR_USE_SMS
+#error "To run SMS test, the cellular.use-sms option must be enabled"
+#endif // MBED_CONF_CELLULAR_USE_SMS
+
 using namespace utest::v1;
 using namespace sim5320;
 

@@ -42,7 +42,9 @@ void SIM5320::_init_driver()
     _device = new SIM5320CellularDevice(_serial_ptr);
     _information = _device->open_information(_serial_ptr);
     _network = _device->open_network(_serial_ptr);
+#if MBED_CONF_CELLULAR_USE_SMS
     _sms = _device->open_sms(_serial_ptr);
+#endif // MBED_CONF_CELLULAR_USE_SMS
     _context = _device->create_context(_serial_ptr);
     _gps = _device->open_gps(_serial_ptr);
     _ftp_client = _device->open_ftp_client(_serial_ptr);
@@ -57,7 +59,9 @@ SIM5320::~SIM5320()
 {
     _device->close_information();
     _device->close_network();
+#if MBED_CONF_CELLULAR_USE_SMS
     _device->close_sms();
+#endif // MBED_CONF_CELLULAR_USE_SMS
     _device->delete_context(_context);
     _device->close_gps();
     _device->release_at_handler(_at);
@@ -299,10 +303,12 @@ CellularNetwork *SIM5320::get_network()
     return _network;
 }
 
+#if MBED_CONF_CELLULAR_USE_SMS
 CellularSMS *SIM5320::get_sms()
 {
     return _sms;
 }
+#endif // MBED_CONF_CELLULAR_USE_SMS
 
 CellularContext *SIM5320::get_context()
 {

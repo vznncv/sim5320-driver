@@ -175,12 +175,14 @@ public:
      */
     CellularNetwork *get_network();
 
+#if MBED_CONF_CELLULAR_USE_SMS
     /**
      * Get sms interface.
      *
      * @return
      */
     CellularSMS *get_sms();
+#endif // MBED_CONF_CELLULAR_USE_SMS
 
     /**
      * Get cellular context interface.
@@ -222,7 +224,9 @@ private:
     SIM5320CellularDevice *_device;
     CellularInformation *_information;
     CellularNetwork *_network;
+#if MBED_CONF_CELLULAR_USE_SMS
     CellularSMS *_sms;
+#endif // MBED_CONF_CELLULAR_USE_SMS
     CellularContext *_context;
     SIM5320GPSDevice *_gps;
     SIM5320FTPClient *_ftp_client;

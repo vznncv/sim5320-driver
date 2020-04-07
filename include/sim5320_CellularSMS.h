@@ -1,5 +1,8 @@
 #ifndef SIM5320_CELLULARSIM_H
 #define SIM5320_CELLULARSIM_H
+
+#if MBED_CONF_CELLULAR_USE_SMS
+
 #include "AT_CellularSMS.h"
 #include "mbed.h"
 
@@ -42,4 +45,7 @@ protected:
     nsapi_error_t get_sms_message_mode(CellularSMSMmode &mode);
 };
 }
+
+#endif // MBED_CONF_CELLULAR_USE_SMS
+
 #endif // SIM5320_CELLULARSIM_H

@@ -118,7 +118,9 @@ protected:
     virtual AT_CellularInformation *open_information_impl(ATHandler &at);
     virtual AT_CellularNetwork *open_network_impl(ATHandler &at);
     virtual AT_CellularContext *create_context_impl(ATHandler &at, const char *apn, bool cp_req = false, bool nonip_req = false);
+#if MBED_CONF_CELLULAR_USE_SMS
     virtual AT_CellularSMS *open_sms_impl(ATHandler &at);
+#endif // MBED_CONF_CELLULAR_USE_SMS
 
     virtual SIM5320GPSDevice *open_gps_impl(ATHandler &at);
     virtual SIM5320FTPClient *open_ftp_client_impl(ATHandler &at);

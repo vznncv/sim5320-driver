@@ -1,3 +1,5 @@
+#if MBED_CONF_CELLULAR_USE_SMS
+
 #include "sim5320_CellularSMS.h"
 #include "sim5320_utils.h"
 using namespace sim5320;
@@ -175,3 +177,5 @@ nsapi_error_t SIM5320CellularSMS::get_sms_message_mode(CellularSMS::CellularSMSM
     _at.resp_stop();
     return _at.get_last_error();
 }
+
+#endif // MBED_CONF_CELLULAR_USE_SMS

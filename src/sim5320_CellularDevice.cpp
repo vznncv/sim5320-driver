@@ -228,10 +228,12 @@ AT_CellularContext *SIM5320CellularDevice::create_context_impl(ATHandler &at, co
     return new SIM5320CellularContext(at, this, apn, cp_req, nonip_req);
 }
 
+#if MBED_CONF_CELLULAR_USE_SMS
 AT_CellularSMS *SIM5320CellularDevice::open_sms_impl(ATHandler &at)
 {
     return new SIM5320CellularSMS(at);
 }
+#endif // MBED_CONF_CELLULAR_USE_SMS
 
 SIM5320GPSDevice *SIM5320CellularDevice::open_gps_impl(ATHandler &at)
 {
