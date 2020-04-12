@@ -1,7 +1,8 @@
 #ifndef SIM5320_TIMESERVICE_H
 #define SIM5320_TIMESERVICE_H
 
-#include "AT_CellularBase.h"
+#include "ATHandler.h"
+#include "AT_CellularDevice.h"
 #include "mbed.h"
 
 namespace sim5320 {
@@ -9,11 +10,13 @@ namespace sim5320 {
 /**
  * Helper API to get current time using network.
  */
-class SIM5320TimeService : public AT_CellularBase, private NonCopyable<SIM5320TimeService> {
-public:
-    // note: internal API
+class SIM5320TimeService : private NonCopyable<SIM5320TimeService> {
+protected:
+    ATHandler &_at;
+    AT_CellularDevice &_device;
 
-    SIM5320TimeService(ATHandler &at);
+public:
+    SIM5320TimeService(ATHandler &at, AT_CellularDevice &device);
     virtual ~SIM5320TimeService();
 
 private:
@@ -26,6 +29,22 @@ private:
 
 public:
     // TODO: add NTP support
+
+    /**
+     * Enable/disable automatic time and time zone update.
+     *
+     * @param state
+     * @return 0 on success, otherwise non-zero value
+     */
+    nsapi_error_t set_tzu(bool state);
+
+    /**
+     * Get automatic time and time zone update state.
+     *
+     * @param state
+     * @return 0 on success, otherwise non-zero value
+     */
+    nsapi_error_t get_tzu(bool &state);
 
     /**
      * Set list of the web server that can be used to update time.

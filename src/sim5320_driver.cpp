@@ -1,15 +1,19 @@
 ﻿#include "sim5320_driver.h"
 #include "sim5320_CellularNetwork.h"
 #include "sim5320_utils.h"
+
+#include "mbed_trace.h"
+#define TRACE_GROUP "sim5"
+
 using namespace sim5320;
 
 static const int SIM5320_SERIAL_BAUDRATE = 115200;
 
-SIM5320::SIM5320(UARTSerial *serial_ptr, PinName rts, PinName cts, PinName rst)
+SIM5320::SIM5320(BufferedSerial *serial_ptr, PinName rts, PinName cts, PinName rst)
     : _rts(rts)
     , _cts(cts)
     , _serial_ptr(serial_ptr)
-    , _cleanup_uart(false)
+    , _cleanup_serial(false)
     , _rst(rst)
 {
     _init_driver();
@@ -18,8 +22,8 @@ SIM5320::SIM5320(UARTSerial *serial_ptr, PinName rts, PinName cts, PinName rst)
 SIM5320::SIM5320(PinName tx, PinName rx, PinName rts, PinName cts, PinName rst)
     : _rts(rts)
     , _cts(cts)
-    , _serial_ptr(new UARTSerial(tx, rx))
-    , _cleanup_uart(true)
+    , _serial_ptr(new BufferedSerial(tx, rx))
+    , _cleanup_serial(true)
     , _rst(rst)
 {
     _init_driver();
@@ -29,7 +33,7 @@ void SIM5320::_init_driver()
 {
     // configure serial parameters
     _serial_ptr->set_baud(SIM5320_SERIAL_BAUDRATE);
-    _serial_ptr->set_format(8, UARTSerial::None, 1);
+    _serial_ptr->set_format(8, BufferedSerial::None, 1);
 
     // configure hardware reset pin
     if (_rst != NC) {
@@ -40,19 +44,19 @@ void SIM5320::_init_driver()
 
     // create driver interface
     _device = new SIM5320CellularDevice(_serial_ptr);
-    _information = _device->open_information(_serial_ptr);
-    _network = _device->open_network(_serial_ptr);
+    _information = _device->open_information();
+    _network = _device->open_network();
 #if MBED_CONF_CELLULAR_USE_SMS
-    _sms = _device->open_sms(_serial_ptr);
+    _sms = _device->open_sms();
 #endif // MBED_CONF_CELLULAR_USE_SMS
-    _context = _device->create_context(_serial_ptr);
-    _gps = _device->open_gps(_serial_ptr);
-    _ftp_client = _device->open_ftp_client(_serial_ptr);
-    _time_service = _device->open_time_service(_serial_ptr);
+    _context = _device->create_context();
+    _location_service = _device->open_location_service();
+    _ftp_client = _device->open_ftp_client();
+    _time_service = _device->open_time_service();
 
     _startup_request_count = 0;
     _network_up_request_count = 0;
-    _at = _device->get_at_handler(_serial_ptr);
+    _at = _device->get_at_handler();
 }
 
 SIM5320::~SIM5320()
@@ -63,8 +67,7 @@ SIM5320::~SIM5320()
     _device->close_sms();
 #endif // MBED_CONF_CELLULAR_USE_SMS
     _device->delete_context(_context);
-    _device->close_gps();
-    _device->release_at_handler(_at);
+    _device->close_location_service();
     _device->close_ftp_client();
     delete _device;
 
@@ -72,7 +75,7 @@ SIM5320::~SIM5320()
         delete _rst_out_ptr;
     }
 
-    if (_cleanup_uart) {
+    if (_cleanup_serial) {
         delete _serial_ptr;
     }
 }
@@ -81,14 +84,14 @@ nsapi_error_t SIM5320::start_uart_hw_flow_ctrl()
 {
     ATHandlerLocker locker(*_at);
     if (_rts != NC && _cts != NC) {
-        _serial_ptr->set_flow_control(UARTSerial::RTSCTS, _rts, _cts);
+        _serial_ptr->set_flow_control(BufferedSerial::RTSCTS, _rts, _cts);
         _at->cmd_start("AT+IFC=2,2");
         _at->cmd_stop();
     } else if (_rts != NC) {
         _at->cmd_start("AT+IFC=2,0");
         _at->cmd_stop();
     } else if (_cts != NC) {
-        _serial_ptr->set_flow_control(UARTSerial::CTS, _cts);
+        _serial_ptr->set_flow_control(BufferedSerial::CTS, _cts);
         _at->cmd_start("AT+IFC=0,2");
         _at->cmd_stop();
     } else {
@@ -130,15 +133,14 @@ nsapi_error_t SIM5320::init()
     }
 
     // configure http servers to synchronize time
-    _time_service->set_htp_servers(DEFAULT_HTP_SERVERS, DEFAULT_HTP_SERVERS_NUM);
+    err = any_error(err, _time_service->set_htp_servers(DEFAULT_HTP_SERVERS, DEFAULT_HTP_SERVERS_NUM));
+    // enable tzu
+    err = any_error(err, _time_service->set_tzu(true));
 
-    //    // set automatic radio access technology selection
-    //    SIM5320CellularNetwork *sim5320_network = (SIM5320CellularNetwork *)_network;
-    //    if ((err = sim5320_network->set_preffered_radio_access_technology_mode(SIM5320CellularNetwork::PRA;TM_AUTOMATIC))) {
-    //        return err;
-    //    }
+    // initial GPS configuration
+    err = any_error(err, _location_service->init());
 
-    return NSAPI_ERROR_OK;
+    return err;
 }
 
 nsapi_error_t SIM5320::set_factory_settings()
@@ -155,6 +157,7 @@ nsapi_error_t SIM5320::request_to_start()
 {
     nsapi_error_t err = NSAPI_ERROR_OK;
     if (_startup_request_count == 0) {
+        tr_info("sim5320: device up");
         err = _device->init();
     }
     _startup_request_count++;
@@ -170,6 +173,7 @@ nsapi_error_t SIM5320::request_to_stop()
     }
     _startup_request_count--;
     if (_startup_request_count == 0) {
+        tr_info("sim5320: device down");
         err = _device->shutdown();
     }
     return err;
@@ -202,9 +206,11 @@ nsapi_error_t SIM5320::network_up()
             return err;
         }
         // up network
+        tr_info("sim5320: network up");
         CellularContext *context = get_context();
         err = context->connect();
         if (err) {
+            tr_info("sim5320: fail to connect to network");
             request_to_stop();
             return err;
         }
@@ -223,6 +229,7 @@ nsapi_error_t SIM5320::network_down()
     _network_up_request_count--;
     if (_network_up_request_count == 0) {
         // stop network
+        tr_info("sim5320: network down");
         CellularContext *context = get_context();
         err = context->disconnect();
         // stop device even an error occured
@@ -315,9 +322,9 @@ CellularContext *SIM5320::get_context()
     return _context;
 }
 
-SIM5320GPSDevice *SIM5320::get_gps()
+SIM5320LocationService *SIM5320::get_location_service()
 {
-    return _gps;
+    return _location_service;
 }
 
 SIM5320FTPClient *SIM5320::get_ftp_client()

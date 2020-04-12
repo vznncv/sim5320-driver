@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### Changed
+
+- Breakchange. Migrate from Mbed OS 5.15 to 6.0.0 as framework implementation of the versions 5.15 and 5.14 contains
+  a bug that causes errors when non-network API is used.
+- Breakchange. Refactor `SIM5320GPSDevice` and rename it to `SIM5320LocationService`
+
 ### Added
 
 - Added `TimeService` to synchronize time over network.

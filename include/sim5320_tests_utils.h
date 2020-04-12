@@ -84,14 +84,6 @@ inline utest::v1::status_t unite_utest_status_with_err(utest::v1::status_t statu
     return status;
 }
 
-inline int any_error(int err_1, int err_2)
-{
-    if (err_1) {
-        return err_1;
-    }
-    return err_2;
-}
-
 inline bool not_empty(const char *str)
 {
     return strlen(str) > 0;

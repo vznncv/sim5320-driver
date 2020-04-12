@@ -13,10 +13,11 @@
 using namespace sim5320;
 
 /**
- * Pin map
+ * Settings
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
+#define APP_LED LED2
 
 #define CHECK_RET_CODE(expr)                                                           \
     {                                                                                  \
@@ -28,7 +29,7 @@ using namespace sim5320;
         }                                                                              \
     }
 
-DigitalOut led(LED2);
+DigitalOut led(APP_LED);
 
 int main()
 {

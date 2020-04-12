@@ -1,7 +1,13 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows GPS usage.
+ * The example shows FTP usage.
+ *
+ * Requirements:
+ *
+ * - active SIM card with an internet access
+ *
+ * Note: to run the example, you should adjust APN settings.
  */
 
 #include "mbed.h"
@@ -13,10 +19,21 @@
 using namespace sim5320;
 
 /**
- * Modem settings.
+ * Settings.
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+#define MODEM_SIM_APN "internet.mts.ru"
+#define MODEM_SIM_APN_USERNAME "mts"
+#define MODEM_SIM_APN_PASSWORD "mts"
+#define APP_LED LED2
+/**
+ * Test FTP server settings
+ */
+#define FTP_URL "ftp://ftp.yandex.ru"
+#define FTP_DEMO_DIR "/debian"
+#define FTP_DEMO_FILE "/debian/README"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -29,27 +46,7 @@ using namespace sim5320;
         }                                                                              \
     }
 
-DigitalOut led(LED2);
-InterruptIn button(BUTTON1);
-
-struct click_detector_t {
-    volatile int counter;
-
-    click_detector_t(int counter = 0)
-        : counter(counter)
-    {
-    }
-
-    void reset()
-    {
-        counter = 0;
-    }
-
-    void click()
-    {
-        counter++;
-    }
-};
+DigitalOut led(APP_LED);
 
 #define SEPARATOR_WIDTH 80
 
@@ -75,57 +72,61 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
-void print_time(time_t *time)
-{
-    tm parsed_time;
-    char str_buf[32];
-    gmtime_r(time, &parsed_time);
-    strftime(str_buf, 32, "%Y/%m/%d %H:%M:%S (UTC)", &parsed_time);
-    printf("%s", str_buf);
-}
-
 int main()
 {
     // create driver
     SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
+    char buf[256];
+
     // reset and initialize device
-    printf("Initialize device ...\n");
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
     CHECK_RET_CODE(sim5320.request_to_start());
 
-    // GPS demo
-    SIM5320GPSDevice *gps = sim5320.get_gps();
-    CHECK_RET_CODE(gps->start(SIM5320GPSDevice::STANDALONE_MODE));
-    // set desired GPS accuracy
-    CHECK_RET_CODE(gps->set_desired_accuracy(150));
-    print_header("Start gps");
-    SIM5320GPSDevice::gps_coord_t gps_coord;
-    bool has_gps_coord = false;
-    click_detector_t click_detector;
-    button.rise(callback(&click_detector, &click_detector_t::click));
+    CellularContext *context = sim5320.get_context();
 
-    printf("Wait gps coordinates. Click button to stop\n");
-    while (click_detector.counter == 0) {
-        gps->get_coord(has_gps_coord, gps_coord);
-        if (has_gps_coord) {
-            // print gps coordinates
-            printf("GPS data:\n");
-            printf("  - longitude: %.8f\n", gps_coord.longitude);
-            printf("  - latitude: %.8f\n", gps_coord.latitude);
-            printf("  - altitude: %.1f\n", gps_coord.altitude);
-            printf("  - timestamp: ");
-            print_time(&gps_coord.time);
-            printf("\n");
-        } else {
-            printf("Wait gps coordinates...\n");
-        }
-        ThisThread::sleep_for(5000);
+    // set credential
+    if (strlen(MODEM_SIM_PIN) > 0) {
+        CHECK_RET_CODE(sim5320.get_device()->set_pin(MODEM_SIM_PIN));
+    }
+    // set APN settings
+    context->set_credentials(MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD);
+    // connect to network
+    CHECK_RET_CODE(context->connect()); // note: by default operations is blocking
+    printf("The device has connected to network\n");
+
+    // 1. Connect to ftp folder
+    SIM5320FTPClient *ftp_client = sim5320.get_ftp_client();
+    printf("Connect to \"%s\" ...\n", FTP_URL);
+    CHECK_RET_CODE(ftp_client->connect(FTP_URL));
+    printf("Connected\n");
+
+    // 2. Change default location
+    CHECK_RET_CODE(ftp_client->set_cwd(FTP_DEMO_DIR));
+
+    // 3. Show directory
+    SIM5320FTPClient::dir_entry_list_t dir_entry_list;
+    CHECK_RET_CODE(ftp_client->listdir(FTP_DEMO_DIR, &dir_entry_list));
+    sprintf(buf, "list directory \"%s\"", FTP_DEMO_DIR);
+    print_header(buf);
+    SIM5320FTPClient::dir_entry_t *dir_entry_ptr = dir_entry_list.get_head();
+    while (dir_entry_ptr != NULL) {
+        printf("- %s (%s)\n", dir_entry_ptr->name, dir_entry_ptr->d_type == DT_DIR ? "DIR" : "FILE");
+        dir_entry_ptr = dir_entry_ptr->next;
     }
     print_separator();
 
+    // 4. read file
+    sprintf(buf, "File \"%s\"", FTP_DEMO_FILE);
+    print_header(buf);
+    CHECK_RET_CODE(ftp_client->download(FTP_DEMO_FILE, stdout));
+    print_separator();
+
     printf("Stop ...\n");
+    CHECK_RET_CODE(ftp_client->disconnect());
+    CHECK_RET_CODE(context->disconnect());
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 

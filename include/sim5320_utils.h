@@ -72,6 +72,105 @@ int read_full_fuzzy_response(ATHandler &at, bool wait_response_after_ok, bool wa
 int vread_full_fuzzy_response(ATHandler &at, bool wait_response_after_ok, bool wait_response_after_error, const char *prefix, const char *format_string, va_list arg);
 
 /**
+ * Helper wrapper to execute simple AT command that accept and returns nothing.
+ *
+ * @param at at @c ATHandler object
+ * @param cmd cmd command without "AT" prefix
+ * @param lock lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+nsapi_error_t at_cmdw_run(ATHandler &at, const char *cmd, bool lock = true);
+
+/**
+ * Helper wrapper to execute simple AT command that returns nothing, but accepts one integer value.
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value target number
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+nsapi_error_t at_cmdw_set_i(ATHandler &at, const char *cmd, int value, bool lock = true);
+
+/**
+ * Helper wrapper to execute simple AT command that accepts nothing, but returns one integer value.
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value returned value
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+nsapi_error_t at_cmdw_get_i(ATHandler &at, const char *cmd, int &value, bool lock = true);
+
+/**
+ * Helper wrapper to execute simple AT command that returns nothing, but accepts boolean value (0 or 1).
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value value
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+inline nsapi_error_t at_cmdw_set_b(ATHandler &at, const char *cmd, bool value, bool lock = true)
+{
+    return at_cmdw_set_i(at, cmd, value ? 1 : 0, lock);
+}
+
+/**
+ * Helper wrapper to execute simple AT command that accepts nothing, but returns one boolean value (0 or 1).
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value returned value
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+inline nsapi_error_t at_cmdw_get_b(ATHandler &at, const char *cmd, bool &value, bool lock = true)
+{
+    int err, value_i;
+    err = at_cmdw_get_i(at, cmd, value_i, lock);
+    if (err) {
+        return err;
+    }
+    if (value_i == 0) {
+        value = false;
+        err = 0;
+    } else if (value_i == 1) {
+        value = true;
+        err = 0;
+    } else {
+        // unknown value
+        err = -1;
+    }
+    return err;
+}
+
+/**
+ * Helper wrapper to execute simple AT command that returns nothing, but accepts two integer value.
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value_1 first number
+ * @param value_2 second number
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+nsapi_error_t at_cmdw_set_ii(ATHandler &at, const char *cmd, int value_1, int value_2, bool lock = true);
+
+/**
+ * Helper wrapper to execute simple AT command that accepts nothing, but returns tow integer values.
+ *
+ * @param at @c ATHandler object
+ * @param cmd command without "AT" prefix
+ * @param value_1 first value
+ * @param value_2 second value
+ * @param lock ATHandler lock flag
+ * @return 0 on success, otherwise non-zero value
+ */
+nsapi_error_t at_cmdw_get_ii(ATHandler &at, const char *cmd, int &value_1, int &value_2, bool lock = true);
+
+/**
  * Helper object to lock @c ATHandler object using RAII approach.
  */
 class ATHandlerLocker {
@@ -91,5 +190,32 @@ private:
     int _timeout;
     int _lock_count;
 };
+
+/**
+ * Helper class to manage objects with RAII approach.
+ *
+ * It's created for internal usage and shouldn't be used directly.
+ */
+//template <typename TObj, typename TAMRet, TAMRet (TObj::*acquire_method)(), typename TRMRet, TRMRet (TObj::*release_method)()>
+//class BaseGuard {
+//private:
+//    BaseGuard(BaseGuard const &) = delete;
+//    BaseGuard &operator=(BaseGuard const &) = delete;
+//    TObj *_obj;
+//public:
+//    BaseGuard(TObj *obj)
+//        : _obj(obj)
+//    {
+//        (*_obj.*acquire_method)();
+//    }
+//    BaseGuard(TObj &obj)
+//        : BaseGuard(&obj)
+//    {
+//    }
+//    ~BaseGuard()
+//    {
+//        (*_obj.*release_method)();
+//    }
+//};
 }
 #endif // SIM5320_UTILS_H

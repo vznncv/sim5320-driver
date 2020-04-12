@@ -3,8 +3,8 @@
 #include "sim5320_utils.h"
 using namespace sim5320;
 
-SIM5320CellularNetwork::SIM5320CellularNetwork(ATHandler &at_handler)
-    : AT_CellularNetwork(at_handler)
+SIM5320CellularNetwork::SIM5320CellularNetwork(ATHandler &at_handler, AT_CellularDevice &device)
+    : AT_CellularNetwork(at_handler, device)
 {
 }
 

@@ -12,8 +12,9 @@ using namespace sim5320;
 #define FTP_RESPONSE_TIMEOUT 24000
 #define FTP_DEVICE_TIMEOUT 20
 
-SIM5320FTPClient::SIM5320FTPClient(ATHandler &at)
-    : AT_CellularBase(at)
+SIM5320FTPClient::SIM5320FTPClient(ATHandler &at, AT_CellularDevice &device)
+    : _at(at)
+    , _device(device)
     , _buffer(NULL)
     , _cleanup_buffer(false)
 {

@@ -18,11 +18,12 @@
 using namespace sim5320;
 
 /**
- * Modem settings.
+ * Settings
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
 #define MODEM_SIM_PIN ""
+#define APP_LED LED2
 
 #define CHECK_RET_CODE(expr)                                                           \
     {                                                                                  \
@@ -34,7 +35,7 @@ using namespace sim5320;
         }                                                                              \
     }
 
-DigitalOut led(LED2);
+DigitalOut led(APP_LED);
 
 nsapi_error_t attach_to_network(SIM5320 *sim5320)
 {

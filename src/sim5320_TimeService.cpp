@@ -4,8 +4,9 @@
 #include <string.h>
 using namespace sim5320;
 
-SIM5320TimeService::SIM5320TimeService(ATHandler &at)
-    : AT_CellularBase(at)
+SIM5320TimeService::SIM5320TimeService(ATHandler &at, AT_CellularDevice &device)
+    : _at(at)
+    , _device(device)
     , _htp_servers(nullptr)
     , _htp_servers_num(0)
 {
@@ -34,10 +35,7 @@ nsapi_error_t SIM5320TimeService::_sync_time_with_htp_servers(const char *const 
 
     // delete old existed domains
     while (!_at.get_last_error()) {
-        _at.cmd_start("AT+CHTPSERV=");
-        _at.write_string("DEL");
-        _at.write_int(0);
-        _at.cmd_stop_read_resp();
+        _at.at_cmd_discard("+CHTPSERV", "=", "%s%i", "DEL", 0);
     }
     // reset error
     _at.clear_error();
@@ -48,12 +46,7 @@ nsapi_error_t SIM5320TimeService::_sync_time_with_htp_servers(const char *const 
         if (n <= 1) {
             port = 80;
         }
-        _at.cmd_start("AT+CHTPSERV=");
-        _at.write_string("ADD");
-        _at.write_string(hostname);
-        _at.write_int(port);
-        _at.write_int(i);
-        _at.cmd_stop_read_resp();
+        _at.at_cmd_discard("+CHTPSERV", "=", "%s%s%d%d", "ADD", hostname, port, i);
     }
 
     if ((err = _at.get_last_error())) {
@@ -125,6 +118,16 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
     time -= tz_seconds;
 
     return NSAPI_ERROR_OK;
+}
+
+nsapi_error_t SIM5320TimeService::set_tzu(bool state)
+{
+    return at_cmdw_set_b(_at, "+CTZU", state);
+}
+
+nsapi_error_t SIM5320TimeService::get_tzu(bool &state)
+{
+    return at_cmdw_get_b(_at, "+CTZU", state);
 }
 
 nsapi_error_t SIM5320TimeService::set_htp_servers(const char *const servers[], size_t size)

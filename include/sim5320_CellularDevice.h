@@ -8,7 +8,7 @@
 #include "CellularSMS.h"
 #include "mbed.h"
 #include "sim5320_FTPClient.h"
-#include "sim5320_GPSDevice.h"
+#include "sim5320_LocationService.h"
 #include "sim5320_TimeService.h"
 
 namespace sim5320 {
@@ -19,7 +19,7 @@ namespace sim5320 {
 class SIM5320CellularDevice : public AT_CellularDevice, private NonCopyable<SIM5320CellularDevice> {
 public:
     SIM5320CellularDevice(FileHandle *fh);
-    virtual ~SIM5320CellularDevice();
+    virtual ~SIM5320CellularDevice() override;
 
     /**
      * Perform basic module initialization to check if it works.
@@ -49,23 +49,23 @@ public:
     virtual nsapi_error_t get_power_level(int &func_level);
 
     // CellularDevice
-    virtual void set_timeout(int timeout);
+    virtual void set_timeout(int timeout) override;
 
     // AT_CellularDevice
-    virtual nsapi_error_t init();
+    virtual nsapi_error_t init() override;
 
     /**
-     * Get GPS device interface.
+     * Get location service interface.
      *
      * @param fh
      * @return
      */
-    virtual SIM5320GPSDevice *open_gps(FileHandle *fh);
+    virtual SIM5320LocationService *open_location_service();
 
     /**
-     * Close GPS device interface.
+     * Close location service interface.
      */
-    virtual void close_gps();
+    virtual void close_location_service();
 
     /**
      * Open FTP client interface.
@@ -73,7 +73,7 @@ public:
      * @param fh
      * @return
      */
-    virtual SIM5320FTPClient *open_ftp_client(FileHandle *fh);
+    virtual SIM5320FTPClient *open_ftp_client();
 
     /**
      * Close FTP client interface.
@@ -86,7 +86,7 @@ public:
     * @param fh
     * @return
     */
-    virtual SIM5320TimeService *open_time_service(FileHandle *fh);
+    virtual SIM5320TimeService *open_time_service();
 
     /**
     * Close time service interface.
@@ -113,16 +113,15 @@ public:
      */
     virtual nsapi_error_t set_subscriber_number(const char *number);
 
-protected:
     // AT_CellularDevice
-    virtual AT_CellularInformation *open_information_impl(ATHandler &at);
-    virtual AT_CellularNetwork *open_network_impl(ATHandler &at);
-    virtual AT_CellularContext *create_context_impl(ATHandler &at, const char *apn, bool cp_req = false, bool nonip_req = false);
+    virtual AT_CellularInformation *open_information_impl(ATHandler &at) override;
+    virtual AT_CellularNetwork *open_network_impl(ATHandler &at) override;
+    virtual AT_CellularContext *create_context_impl(ATHandler &at, const char *apn, bool cp_req = false, bool nonip_req = false) override;
 #if MBED_CONF_CELLULAR_USE_SMS
-    virtual AT_CellularSMS *open_sms_impl(ATHandler &at);
+    virtual AT_CellularSMS *open_sms_impl(ATHandler &at) override;
 #endif // MBED_CONF_CELLULAR_USE_SMS
 
-    virtual SIM5320GPSDevice *open_gps_impl(ATHandler &at);
+    virtual SIM5320LocationService *open_location_service_impl(ATHandler &at);
     virtual SIM5320FTPClient *open_ftp_client_impl(ATHandler &at);
     virtual SIM5320TimeService *open_time_service_impl(ATHandler &at);
 
@@ -142,10 +141,10 @@ protected:
             , _interface(nullptr){};
         ~DeviceInterfaceManager(){};
 
-        IterfaceType *open_interface(FileHandle *fh, SIM5320CellularDevice *device)
+        IterfaceType *open_interface(SIM5320CellularDevice *device)
         {
             if (!_interface) {
-                _interface = (device->*open_method_impl)(*device->get_at_handler(fh));
+                _interface = (device->*open_method_impl)(device->_at);
             }
             _ref_count++;
             return _interface;
@@ -155,10 +154,8 @@ protected:
             if (_interface) {
                 _ref_count--;
                 if (_ref_count <= 0) {
-                    ATHandler *atHandler = &_interface->get_at_handler();
                     delete _interface;
                     _interface = NULL;
-                    device->release_at_handler(atHandler);
                 }
             }
         }
@@ -169,7 +166,7 @@ protected:
         }
     };
 
-    DeviceInterfaceManager<SIM5320GPSDevice, &SIM5320CellularDevice::open_gps_impl> _gps;
+    DeviceInterfaceManager<SIM5320LocationService, &SIM5320CellularDevice::open_location_service_impl> _location_service;
     DeviceInterfaceManager<SIM5320FTPClient, &SIM5320CellularDevice::open_ftp_client_impl> _ftp_client;
     DeviceInterfaceManager<SIM5320TimeService, &SIM5320CellularDevice::open_time_service_impl> _time_service;
 };

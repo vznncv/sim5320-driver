@@ -19,7 +19,7 @@
 using namespace sim5320;
 
 /**
- * Modem settings.
+ * Settings
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
@@ -27,6 +27,7 @@ using namespace sim5320;
 #define MODEM_SIM_APN "internet.mts.ru"
 #define MODEM_SIM_APN_USERNAME "mts"
 #define MODEM_SIM_APN_PASSWORD "mts"
+#define APP_LED LED2
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -39,7 +40,7 @@ using namespace sim5320;
         }                                                                              \
     }
 
-DigitalOut led(LED2);
+DigitalOut led(APP_LED);
 
 static const char *get_reg_status_name(CellularNetwork::RegistrationStatus status)
 {

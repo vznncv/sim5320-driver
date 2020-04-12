@@ -4,8 +4,9 @@
 #include "mbed.h"
 #include "sim5320_CellularDevice.h"
 #include "sim5320_FTPClient.h"
-#include "sim5320_GPSDevice.h"
+#include "sim5320_LocationService.h"
 #include "sim5320_TimeService.h"
+#include "sim5320_utils.h"
 
 namespace sim5320 {
 
@@ -22,7 +23,7 @@ public:
      * @param cts CTS pin of the Serial interface
      * @param rst hardware reset pin
      */
-    SIM5320(UARTSerial *serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
+    SIM5320(BufferedSerial *serial_ptr, PinName rts = NC, PinName cts = NC, PinName rst = NC);
     /**
      * Constructor.
      *
@@ -192,11 +193,11 @@ public:
     CellularContext *get_context();
 
     /**
-     * Get gps interface.
+     * Get location service interface.
      *
      * @return
      */
-    SIM5320GPSDevice *get_gps();
+    SIM5320LocationService *get_location_service();
 
     /**
      * Get ftp client.
@@ -215,8 +216,8 @@ public:
 private:
     PinName _rts;
     PinName _cts;
-    UARTSerial *_serial_ptr;
-    bool _cleanup_uart;
+    BufferedSerial *_serial_ptr;
+    bool _cleanup_serial;
 
     PinName _rst;
     DigitalOut *_rst_out_ptr;
@@ -228,7 +229,7 @@ private:
     CellularSMS *_sms;
 #endif // MBED_CONF_CELLULAR_USE_SMS
     CellularContext *_context;
-    SIM5320GPSDevice *_gps;
+    SIM5320LocationService *_location_service;
     SIM5320FTPClient *_ftp_client;
     SIM5320TimeService *_time_service;
 

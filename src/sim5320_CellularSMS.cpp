@@ -7,8 +7,9 @@ using namespace sim5320;
 #define CTRL_Z "\x1a"
 #define ESC "\x1b"
 
-SIM5320CellularSMS::SIM5320CellularSMS(ATHandler &at_handler)
-    : AT_CellularSMS(at_handler)
+SIM5320CellularSMS::SIM5320CellularSMS(ATHandler &at_handler, AT_CellularDevice &device)
+    : AT_CellularSMS(at_handler, device)
+    , _at(at_handler)
 {
 }
 

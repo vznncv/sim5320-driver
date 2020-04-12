@@ -19,7 +19,7 @@
 using namespace sim5320;
 
 /**
- * Modem settings.
+ * Settings
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
@@ -27,6 +27,7 @@ using namespace sim5320;
 #define MODEM_SIM_APN "internet.mts.ru"
 #define MODEM_SIM_APN_USERNAME "mts"
 #define MODEM_SIM_APN_PASSWORD "mts"
+#define APP_LED LED2
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -81,7 +82,7 @@ int main()
     // check time service
     print_header("time service demo");
     SIM5320TimeService *time_service = sim5320.get_time_service();
-    printf("Sync time ...");
+    printf("Sync time ...\n");
     CHECK_RET_CODE(time_service->sync_time());
     time_t current_time;
     CHECK_RET_CODE(time_service->get_time(&current_time));
