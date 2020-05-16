@@ -67,6 +67,20 @@ static int coord_clear(SIM5320LocationService::coord_t &coord)
 
 #define COORD_CLEAR(coord) coord_clear(coord)
 
+static time_t build_time(int year, int month, int mday, int hour, int minute, int second)
+{
+    struct tm timeinfo;
+    timeinfo.tm_year = year - 1900;
+    timeinfo.tm_mon = month - 1;
+    timeinfo.tm_mday = mday;
+    timeinfo.tm_hour = hour;
+    timeinfo.tm_min = minute;
+    timeinfo.tm_sec = second;
+    return mktime(&timeinfo);
+}
+
+static time_t BASE_TIME = build_time(2020, 5, 1, 0, 0, 0);
+
 static int coord_verify(SIM5320LocationService::coord_t &coord, int line_no)
 {
     int err = 0;
@@ -74,14 +88,20 @@ static int coord_verify(SIM5320LocationService::coord_t &coord, int line_no)
     if (coord.time == 0) {
         UNITY_TEST_FAIL(line_no, "Expected that time is filled, but it isn't");
         err = -2;
+    } else {
+        // check time (GPS week rollover issue)
+        if (coord.time < BASE_TIME) {
+            UNITY_TEST_FAIL(line_no, "Invalid time. It should be grater that 2020-05-01, but it isn't.");
+            err = -3;
+        }
     }
     if (coord.latitude == 0) {
         UNITY_TEST_FAIL(line_no, "Expected that latitude is filled, but it isn't");
-        err = -3;
+        err = -4;
     }
     if (coord.longitude == 0) {
         UNITY_TEST_FAIL(line_no, "Expected that longitude is filled, but it isn't");
-        err = -4;
+        err = -5;
     }
 
     return err;

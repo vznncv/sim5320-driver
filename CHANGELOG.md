@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### Fixed
+
+- Fix gps rollover week issue (see [Declaration of GPS week rollover issue](https://cdn-learn.adafruit.com/assets/assets/000/084/848/original/GPS-week-rollover_Simcom.pdf?1574619386)).
+
 ### Changed
 
 - Breakchange. Migrate from Mbed OS 5.15 to 6.0.0 as framework implementation of the versions 5.15 and 5.14 contains

@@ -93,6 +93,22 @@ nsapi_error_t SIM5320LocationService::gps_start(SIM5320LocationService::GPSMode 
     return _wait_gps_start();
 }
 
+/**
+ * Fix sim5320 rollover bug:
+ *
+ *  See the following links for more details:
+ *  - https://github.com/openvehicles/Open-Vehicle-Monitoring-System-3/issues/284
+ *  - https://www.cika.com/soporte/Information/GSMmodules/GPS-week-rollover_Simcom.pdf
+ *
+ */
+static time_t fix_date_week_rollover(time_t t)
+{
+    // note: find better way to handle this issue
+    // this time to week rollover period
+    t += 7 * 1024 * 24 * 60 * 60;
+    return t;
+}
+
 nsapi_error_t SIM5320LocationService::gps_read_coord(SIM5320LocationService::coord_t *coord, bool &ff_flag)
 {
     char lat_str[16];
@@ -157,6 +173,8 @@ nsapi_error_t SIM5320LocationService::gps_read_coord(SIM5320LocationService::coo
         coord->longitude = log;
         coord->altitude = alt;
         coord->time = mktime(&gps_tm);
+        // fix rollover week issue
+        coord->time = fix_date_week_rollover(coord->time);
     }
     _at.resp_stop();
 
