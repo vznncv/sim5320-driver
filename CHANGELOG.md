@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Breakchange. Migrate from Mbed OS 5.15 to 6.0.0 as framework implementation of the versions 5.15 and 5.14 contains
+- Breakchange. Migrate from Mbed OS `5.15` to `6.0.0-beta-1` as framework implementation of the versions 5.15 and 5.14 contains
   a bug that causes errors when non-network API is used.
 - Breakchange. Refactor `SIM5320GPSDevice` and rename it to `SIM5320LocationService`
 
