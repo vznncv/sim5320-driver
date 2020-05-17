@@ -10,19 +10,16 @@ namespace sim5320 {
  */
 class SIM5320CellularNetwork : public AT_CellularNetwork, private NonCopyable<SIM5320CellularNetwork> {
 public:
-    SIM5320CellularNetwork(ATHandler &at_handler);
+    SIM5320CellularNetwork(ATHandler &at_handler, AT_CellularDevice &device);
     virtual ~SIM5320CellularNetwork();
 
     // AT_CellularNetwork
-    virtual nsapi_error_t set_ciot_optimization_config(CIoT_Supported_Opt supported_opt,
-        CIoT_Preferred_UE_Opt preferred_opt,
-        Callback<void(CIoT_Supported_Opt)> network_support_cb);
-    virtual nsapi_error_t get_ciot_ue_optimization_config(CIoT_Supported_Opt &supported_opt,
-        CIoT_Preferred_UE_Opt &preferred_opt);
-    virtual nsapi_error_t get_ciot_network_optimization_config(CIoT_Supported_Opt &supported_network_opt);
-    virtual nsapi_error_t detach();
-    virtual nsapi_error_t scan_plmn(operList_t &operators, int &ops_count);
-    virtual nsapi_error_t get_registration_params(RegistrationType type, registration_params_t &reg_params);
+    virtual nsapi_error_t set_ciot_optimization_config(CIoT_Supported_Opt supported_opt, CIoT_Preferred_UE_Opt preferred_opt, Callback<void(CIoT_Supported_Opt)> network_support_cb) override;
+    virtual nsapi_error_t get_ciot_ue_optimization_config(CIoT_Supported_Opt &supported_opt, CIoT_Preferred_UE_Opt &preferred_opt) override;
+    virtual nsapi_error_t get_ciot_network_optimization_config(CIoT_Supported_Opt &supported_network_opt) override;
+    virtual nsapi_error_t detach() override;
+    virtual nsapi_error_t scan_plmn(operList_t &operators, int &ops_count) override;
+    virtual nsapi_error_t get_registration_params(RegistrationType type, registration_params_t &reg_params) override;
 
     /**
      * Get active radio access technology.
@@ -48,7 +45,7 @@ public:
 
 protected:
     // AT_CellularNetwork
-    virtual nsapi_error_t set_access_technology_impl(RadioAccessTechnology op_rat);
+    virtual nsapi_error_t set_access_technology_impl(RadioAccessTechnology op_rat) override;
 
 private:
     static const int _OPERATORS_SCAN_TIMEOUT = 120000;

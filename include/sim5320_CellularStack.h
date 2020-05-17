@@ -11,20 +11,17 @@ namespace sim5320 {
  */
 class SIM5320CellularStack : public AT_CellularStack, private NonCopyable<SIM5320CellularStack> {
 public:
-    SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type);
+    SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type, AT_CellularDevice &device);
     virtual ~SIM5320CellularStack();
 
     // DNS
-    virtual nsapi_error_t gethostbyname(const char *host, SocketAddress *address, nsapi_version_t version = NSAPI_UNSPEC, const char *interface_name = NULL);
+    virtual nsapi_error_t gethostbyname(const char *host, SocketAddress *address, nsapi_version_t version = NSAPI_UNSPEC, const char *interface_name = NULL) override;
 
 protected:
-    virtual int get_max_socket_count();
-    virtual bool is_protocol_supported(nsapi_protocol_t protocol);
+    virtual nsapi_error_t create_socket_impl(CellularSocket *socket) override;
+    virtual nsapi_error_t socket_close_impl(int sock_id) override;
 
-    virtual nsapi_error_t create_socket_impl(CellularSocket *socket);
-    virtual nsapi_error_t socket_close_impl(int sock_id);
-
-    virtual nsapi_size_or_error_t socket_sendto_impl(CellularSocket *socket, const SocketAddress &address, const void *data, nsapi_size_t size);
+    virtual nsapi_size_or_error_t socket_sendto_impl(CellularSocket *socket, const SocketAddress &address, const void *data, nsapi_size_t size) override;
     /**
      * Receive data.
      *
@@ -34,7 +31,7 @@ protected:
      * - NSAPI_ERROR_WOULD_BLOCK, if socket isn't close, but data isn't available
      * - other negative value in case of error.
      */
-    virtual nsapi_size_or_error_t socket_recvfrom_impl(CellularSocket *socket, SocketAddress *address, void *buffer, nsapi_size_t size);
+    virtual nsapi_size_or_error_t socket_recvfrom_impl(CellularSocket *socket, SocketAddress *address, void *buffer, nsapi_size_t size) override;
 
 private:
     // map with active sockets

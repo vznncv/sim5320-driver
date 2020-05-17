@@ -9,8 +9,8 @@
 
 using namespace sim5320;
 
-SIM5320CellularStack::SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type)
-    : AT_CellularStack(at, cid, stack_type)
+SIM5320CellularStack::SIM5320CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type, AT_CellularDevice &device)
+    : AT_CellularStack(at, cid, stack_type, device)
     , _active_sockets(0)
 {
     _at.set_urc_handler("+CIPEVENT:", callback(this, &SIM5320CellularStack::_urc_cipevent));
@@ -66,23 +66,6 @@ nsapi_error_t SIM5320CellularStack::gethostbyname(const char *host, SocketAddres
     return err;
 }
 
-int SIM5320CellularStack::get_max_socket_count()
-{
-    return 10;
-}
-
-bool SIM5320CellularStack::is_protocol_supported(nsapi_protocol_t protocol)
-{
-    switch (protocol) {
-    case NSAPI_TCP:
-        return true;
-    case NSAPI_UDP:
-        return true;
-    default:
-        return false;
-    }
-}
-
 #define TCP_OPEN_TIMEOUT 30000
 
 nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::CellularSocket *socket)
@@ -92,7 +75,7 @@ nsapi_error_t SIM5320CellularStack::create_socket_impl(AT_CellularStack::Cellula
 
     // use socket index as socket id
     int sock_id = -1;
-    for (int i = 0; i < get_max_socket_count(); i++) {
+    for (int i = 0; i < _device.get_property(AT_CellularDevice::PROPERTY_SOCKET_COUNT); i++) {
         if (_socket[i] == socket) {
             sock_id = i;
             break;
@@ -383,7 +366,7 @@ nsapi_size_or_error_t SIM5320CellularStack::socket_recvfrom_impl(AT_CellularStac
 
 AT_CellularStack::CellularSocket *SIM5320CellularStack::_get_socket(int link_id)
 {
-    if (link_id >= 0 && link_id < get_max_socket_count()) {
+    if (link_id >= 0 && link_id < _device.get_property(AT_CellularDevice::PROPERTY_SOCKET_COUNT)) {
         CellularSocket *socket = _socket[link_id];
         return socket;
     }
@@ -426,7 +409,7 @@ void SIM5320CellularStack::_urc_cipevent()
     _at.consume_to_stop_tag();
     // close all connection
     // TODO: find what should be done
-    for (int i = 0; i < get_max_socket_count(); i++) {
+    for (int i = 0; i < _device.get_property(AT_CellularDevice::PROPERTY_SOCKET_COUNT); i++) {
         _disconnect_socket_by_peer(i);
     }
 }

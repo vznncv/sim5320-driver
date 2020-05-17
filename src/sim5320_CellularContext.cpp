@@ -210,7 +210,7 @@ NetworkStack *SIM5320CellularContext::get_stack()
 {
 
     if (!_stack) {
-        _stack = new SIM5320CellularStack(_at, _cid, (nsapi_ip_stack_t)_pdp_type);
+        _stack = new SIM5320CellularStack(_at, _cid, (nsapi_ip_stack_t)_pdp_type, *get_device());
     }
     return _stack;
 }

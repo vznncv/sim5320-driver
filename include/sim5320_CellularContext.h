@@ -15,12 +15,12 @@ public:
     virtual ~SIM5320CellularContext();
 
     // AT_CellularContext
-    virtual void do_connect();
-    virtual uint32_t get_timeout_for_operation(ContextOperation op) const;
+    virtual void do_connect() override;
+    virtual uint32_t get_timeout_for_operation(ContextOperation op) const override;
 
     // CellularContext
-    virtual nsapi_error_t disconnect();
-    virtual bool is_connected();
+    virtual nsapi_error_t disconnect() override;
+    virtual bool is_connected() override;
 
 protected:
     /**
@@ -31,7 +31,7 @@ protected:
     void call_connection_status_cb(cellular_connection_status_t status);
 
     // NetworkInterface interface
-    NetworkStack *get_stack();
+    NetworkStack *get_stack() override;
 
 private:
     bool _is_net_opened;

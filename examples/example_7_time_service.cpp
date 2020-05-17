@@ -1,7 +1,13 @@
 /**
  * Example of the SIM5320E usage with STM32F3Discovery board.
  *
- * The example shows GPS usage.
+ * The example of the TimeServer usage. It shows current time using requests to http servers.
+ *
+ * Requirements:
+ *
+ * - active SIM card with an internet access
+ *
+ * Note: to run the example, you should adjust APN settings.
  */
 
 #include "mbed.h"
@@ -13,10 +19,15 @@
 using namespace sim5320;
 
 /**
- * Modem settings.
+ * Settings
  */
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
+#define MODEM_SIM_PIN ""
+#define MODEM_SIM_APN "internet.mts.ru"
+#define MODEM_SIM_APN_USERNAME "mts"
+#define MODEM_SIM_APN_PASSWORD "mts"
+#define APP_LED LED2
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
 #define CHECK_RET_CODE(expr)                                                           \
@@ -30,26 +41,6 @@ using namespace sim5320;
     }
 
 DigitalOut led(LED2);
-InterruptIn button(BUTTON1);
-
-struct click_detector_t {
-    volatile int counter;
-
-    click_detector_t(int counter = 0)
-        : counter(counter)
-    {
-    }
-
-    void reset()
-    {
-        counter = 0;
-    }
-
-    void click()
-    {
-        counter++;
-    }
-};
 
 #define SEPARATOR_WIDTH 80
 
@@ -75,58 +66,31 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
-void print_time(time_t *time)
-{
-    tm parsed_time;
-    char str_buf[32];
-    gmtime_r(time, &parsed_time);
-    strftime(str_buf, 32, "%Y/%m/%d %H:%M:%S (UTC)", &parsed_time);
-    printf("%s", str_buf);
-}
-
 int main()
 {
     // create driver
     SIM5320 sim5320(MODEM_TX_PIN, MODEM_RX_PIN);
     // reset and initialize device
-    printf("Initialize device ...\n");
+    printf("Initialize modem ...\n");
     CHECK_RET_CODE(sim5320.reset());
     CHECK_RET_CODE(sim5320.init());
     printf("Start ...\n");
-    CHECK_RET_CODE(sim5320.request_to_start());
+    CHECK_RET_CODE(sim5320.network_set_params(MODEM_SIM_PIN, MODEM_SIM_APN, MODEM_SIM_APN_USERNAME, MODEM_SIM_APN_PASSWORD));
+    CHECK_RET_CODE(sim5320.network_up());
+    printf("The device has connected to network\n");
 
-    // GPS demo
-    SIM5320GPSDevice *gps = sim5320.get_gps();
-    CHECK_RET_CODE(gps->start(SIM5320GPSDevice::STANDALONE_MODE));
-    // set desired GPS accuracy
-    CHECK_RET_CODE(gps->set_desired_accuracy(150));
-    print_header("Start gps");
-    SIM5320GPSDevice::gps_coord_t gps_coord;
-    bool has_gps_coord = false;
-    click_detector_t click_detector;
-    button.rise(callback(&click_detector, &click_detector_t::click));
-
-    printf("Wait gps coordinates. Click button to stop\n");
-    while (click_detector.counter == 0) {
-        gps->get_coord(has_gps_coord, gps_coord);
-        if (has_gps_coord) {
-            // print gps coordinates
-            printf("GPS data:\n");
-            printf("  - longitude: %.8f\n", gps_coord.longitude);
-            printf("  - latitude: %.8f\n", gps_coord.latitude);
-            printf("  - altitude: %.1f\n", gps_coord.altitude);
-            printf("  - timestamp: ");
-            print_time(&gps_coord.time);
-            printf("\n");
-        } else {
-            printf("Wait gps coordinates...\n");
-        }
-        ThisThread::sleep_for(5000);
-    }
+    // check time service
+    print_header("time service demo");
+    SIM5320TimeService *time_service = sim5320.get_time_service();
+    printf("Sync time ...\n");
+    CHECK_RET_CODE(time_service->sync_time());
+    time_t current_time;
+    CHECK_RET_CODE(time_service->get_time(&current_time));
+    printf("Success. Current time: %s\n", ctime(&current_time));
     print_separator();
 
     printf("Stop ...\n");
-    CHECK_RET_CODE(sim5320.request_to_stop());
+    CHECK_RET_CODE(sim5320.network_down());
     printf("Complete!\n");
 
     while (1) {

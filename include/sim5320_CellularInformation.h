@@ -7,21 +7,21 @@ namespace sim5320 {
 
 class SIM5320CellularInformation : public AT_CellularInformation, private NonCopyable<SIM5320CellularInformation> {
 public:
-    SIM5320CellularInformation(ATHandler &at_handler);
+    SIM5320CellularInformation(ATHandler &at_handler, AT_CellularDevice &device);
     virtual ~SIM5320CellularInformation();
 
 public:
-    virtual nsapi_error_t get_manufacturer(char *buf, size_t buf_size);
+    virtual nsapi_error_t get_manufacturer(char *buf, size_t buf_size) override;
 
-    virtual nsapi_error_t get_model(char *buf, size_t buf_size);
+    virtual nsapi_error_t get_model(char *buf, size_t buf_size) override;
 
-    virtual nsapi_error_t get_revision(char *buf, size_t buf_size);
+    virtual nsapi_error_t get_revision(char *buf, size_t buf_size) override;
 
-    virtual nsapi_error_t get_serial_number(char *buf, size_t buf_size, SerialNumberType type);
+    virtual nsapi_error_t get_serial_number(char *buf, size_t buf_size, SerialNumberType type) override;
 
-    virtual nsapi_error_t get_imsi(char *imsi, size_t buf_size);
+    virtual nsapi_error_t get_imsi(char *imsi, size_t buf_size) override;
 
-    virtual nsapi_error_t get_iccid(char *buf, size_t buf_size);
+    virtual nsapi_error_t get_iccid(char *buf, size_t buf_size) override;
 
 private:
     /** Request information text from cellular device

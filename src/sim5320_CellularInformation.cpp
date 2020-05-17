@@ -2,8 +2,8 @@
 #include "sim5320_utils.h"
 using namespace sim5320;
 
-SIM5320CellularInformation::SIM5320CellularInformation(ATHandler &at_handler)
-    : AT_CellularInformation(at_handler)
+SIM5320CellularInformation::SIM5320CellularInformation(ATHandler &at_handler, AT_CellularDevice &device)
+    : AT_CellularInformation(at_handler, device)
 {
 }
 

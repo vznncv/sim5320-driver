@@ -1,8 +1,9 @@
 #ifndef SIM5320_FTPCLIENT_H
 #define SIM5320_FTPCLIENT_H
 
-#include "AT_CellularBase.h"
 #include "CellularList.h"
+#include "ATHandler.h"
+#include "AT_CellularDevice.h"
 #include "mbed.h"
 
 namespace sim5320 {
@@ -10,10 +11,14 @@ namespace sim5320 {
 /**
  * FTP client of the SIM5320
  */
-class SIM5320FTPClient : public AT_CellularBase, private NonCopyable<SIM5320FTPClient> {
+class SIM5320FTPClient : private NonCopyable<SIM5320FTPClient> {
 public:
-    SIM5320FTPClient(ATHandler &at);
+    SIM5320FTPClient(ATHandler &at, AT_CellularDevice &device);
     virtual ~SIM5320FTPClient();
+
+protected:
+    AT_CellularDevice &_device;
+    ATHandler &_at;
 
 private:
     // helper buffer for different purposes
