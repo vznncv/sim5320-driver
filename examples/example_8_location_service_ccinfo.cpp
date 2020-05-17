@@ -67,7 +67,7 @@ int main()
         }
         printf("\n");
 
-        ThisThread::sleep_for(5000);
+        ThisThread::sleep_for(10000);
         count++;
         led = !led;
     }

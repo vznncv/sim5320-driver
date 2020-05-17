@@ -77,7 +77,8 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
     const char timestamp_buf_size = 32;
     int err;
     struct tm tm;
-    int n, n_arg, tz, year;
+    int n, n_arg, tz;
+    int read_len;
     char timestamp_buf[timestamp_buf_size];
     timestamp_buf[0] = '\0';
 
@@ -85,10 +86,10 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
     _at.cmd_stop();
     _at.resp_start("+CCLK:");
     // expect output: "yy/mm/dd,hh:mm:ss+tz"
-    _at.read_string(timestamp_buf, timestamp_buf_size);
+    read_len = _at.read_string(timestamp_buf, timestamp_buf_size);
     // hack to fix handle bug if `read_string` consumes only "yy/mm/dd" part, but ignore part after a comma
     // see: https://github.com/ARMmbed/mbed-os/issues/12760
-    if (strlen(timestamp_buf) == 8) {
+    if (read_len == 8) {
         timestamp_buf[8] = ',';
         _at.read_string(timestamp_buf + 9, timestamp_buf_size - 9);
     }
@@ -100,7 +101,7 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
 
     // parse timestamp
     tz = 0;
-    n_arg = sscanf(timestamp_buf, "%i/%i/%i,%i:%i:%2i%i%n", &year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec, &tz, &n);
+    n_arg = sscanf(timestamp_buf, "%i/%i/%i,%i:%i:%2i%i%n", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec, &tz, &n);
     if (strlen(timestamp_buf) != n) {
         // fail to parse timestamp
         return -1;
@@ -109,13 +110,14 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
         tz = 0;
     }
 
-    // adjust month
+    // adjust month and year
     tm.tm_mon -= 1;
+    tm.tm_year += 100;
     // get local time
     *time = mktime(&tm);
     // convert time to UTC
     int tz_seconds = tz * 15 * 60;
-    time -= tz_seconds;
+    *time -= tz_seconds;
 
     return NSAPI_ERROR_OK;
 }
