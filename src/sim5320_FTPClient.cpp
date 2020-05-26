@@ -637,18 +637,37 @@ nsapi_error_t SIM5320FTPClient::get(const char *path, Callback<ssize_t(uint8_t *
     return _get_data_impl(path, data_reader, "GET");
 }
 
-namespace sim5320 {
-struct download_callback_t {
-    FILE *dst_file;
+nsapi_error_t SIM5320FTPClient::download(const char *remote_path, const char *local_path)
+{
+    int err;
+    int file;
 
-    download_callback_t(FILE *dst_file)
-        : dst_file(dst_file)
+    file = open(local_path, O_WRONLY | O_CREAT | O_TRUNC);
+    if (file < 0) {
+        return MBED_ERROR_EIO;
+    }
+
+    err = download(remote_path, file);
+
+    if (close(file)) {
+        err = any_error(err, MBED_ERROR_EIO);
+    }
+
+    return err;
+}
+
+namespace sim5320 {
+struct cfile_download_callback_t {
+    FILE *file;
+
+    cfile_download_callback_t(FILE *file)
+        : file(file)
     {
     }
 
     ssize_t store(uint8_t *buf, size_t len)
     {
-        size_t write_res = fwrite(buf, sizeof(uint8_t), len, dst_file);
+        size_t write_res = fwrite(buf, sizeof(uint8_t), len, file);
         if (write_res != len) {
             return MBED_ERROR_EIO;
         } else {
@@ -658,45 +677,73 @@ struct download_callback_t {
 };
 }
 
-nsapi_error_t SIM5320FTPClient::download(const char *remote_path, const char *local_path)
+nsapi_error_t SIM5320FTPClient::download(const char *remote_path, FILE *local_file)
 {
-    FILE *file = fopen(local_path, "wb");
-    int err;
+    cfile_download_callback_t donwload_callback(local_file);
+    return get(remote_path, callback(&donwload_callback, &cfile_download_callback_t::store));
+}
 
-    if (!file) {
+namespace sim5320 {
+struct file_download_callback_t {
+    int dst_file;
+
+    file_download_callback_t(int dst_file)
+        : dst_file(dst_file)
+    {
+    }
+
+    ssize_t store(uint8_t *buf, size_t len)
+    {
+        ssize_t write_res = write(dst_file, buf, len);
+        if (write_res != len) {
+            return MBED_ERROR_EIO;
+        } else {
+            return len;
+        }
+    }
+};
+}
+
+nsapi_error_t SIM5320FTPClient::download(const char *remote_path, int local_file)
+{
+    file_download_callback_t donwload_callback(local_file);
+    return get(remote_path, callback(&donwload_callback, &file_download_callback_t::store));
+}
+
+nsapi_error_t SIM5320FTPClient::upload(const char *local_path, const char *remote_path)
+{
+    int err;
+    int file;
+
+    file = open(local_path, O_RDONLY);
+    if (file < 0) {
         return MBED_ERROR_EIO;
     }
 
-    err = download(remote_path, file);
+    err = upload(file, remote_path);
 
-    if (fclose(file)) {
+    if (close(file)) {
         err = any_error(err, MBED_ERROR_EIO);
     }
 
     return err;
 }
 
-nsapi_error_t SIM5320FTPClient::download(const char *remote_path, FILE *local_file)
-{
-    download_callback_t donwload_callback(local_file);
-    return get(remote_path, callback(&donwload_callback, &download_callback_t::store));
-}
-
 namespace sim5320 {
-struct upload_callback_t {
-    FILE *src_file;
+struct cfile_upload_callback_t {
+    FILE *file;
 
-    upload_callback_t(FILE *src_file)
-        : src_file(src_file)
+    cfile_upload_callback_t(FILE *file)
+        : file(file)
     {
     }
 
     ssize_t fetch(uint8_t *buf, size_t len)
     {
         errno = 0;
-        size_t read_res = fread(buf, sizeof(uint8_t), len, src_file);
+        size_t read_res = fread(buf, sizeof(uint8_t), len, file);
         if (read_res == 0) {
-            if (feof(src_file)) {
+            if (feof(file)) {
                 return 0;
             } else {
                 return MBED_ERROR_EIO;
@@ -708,28 +755,38 @@ struct upload_callback_t {
 };
 }
 
-nsapi_error_t SIM5320FTPClient::upload(const char *local_path, const char *remote_path)
-{
-    int err;
-    FILE *file = fopen(local_path, "rb");
-
-    if (!file) {
-        return MBED_ERROR_EIO;
-    }
-
-    err = upload(file, remote_path);
-
-    if (fclose(file)) {
-        err = any_error(err, MBED_ERROR_EIO);
-    }
-
-    return err;
-}
-
 nsapi_error_t SIM5320FTPClient::upload(FILE *local_file, const char *remote_path)
 {
-    upload_callback_t upload_callback(local_file);
-    return put(remote_path, callback(&upload_callback, &upload_callback_t::fetch));
+    cfile_upload_callback_t upload_callback(local_file);
+    return put(remote_path, callback(&upload_callback, &cfile_upload_callback_t::fetch));
+}
+
+namespace sim5320 {
+struct file_upload_callback_t {
+    int file;
+
+    file_upload_callback_t(int file)
+        : file(file)
+    {
+    }
+
+    ssize_t fetch(uint8_t *buf, size_t len)
+    {
+        errno = 0;
+        ssize_t read_res = read(file, buf, len);
+        if (read_res < 0) {
+            return MBED_ERROR_EIO;
+        } else {
+            return read_res;
+        }
+    }
+};
+}
+
+nsapi_error_t SIM5320FTPClient::upload(int local_file, const char *remote_path)
+{
+    file_upload_callback_t upload_callback(local_file);
+    return put(remote_path, callback(&upload_callback, &file_upload_callback_t::fetch));
 }
 
 #define FTP_GET_DATA_WAIT_TIMEOUT 3000

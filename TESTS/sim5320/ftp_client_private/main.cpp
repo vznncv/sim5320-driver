@@ -402,29 +402,30 @@ void test_info_functions()
 void test_upload_download_file()
 {
     int err;
-    FILE *file;
+    int res;
+    int file;
     char local_path[32];
     char remote_path[96];
     const size_t file_size = 2560;
     const char file_sym = '3';
-    int sym;
+    char sym;
     sprintf(remote_path, "%s/%s", test_dir, "demo_file.txt");
     sprintf(local_path, "/heap/%s", "demo_file.txt");
 
     // create local file
-    file = fopen(local_path, "wb");
-    TEST_ASSERT_NOT_NULL(file);
-    if (!file) {
+    file = open(local_path, O_WRONLY | O_CREAT | O_TRUNC);
+    TEST_ASSERT_TRUE(file >= 0);
+    if (file < 0) {
         return;
     }
     for (size_t i = 0; i < file_size; i++) {
-        err = fputc(file_sym, file);
-        TEST_ASSERT_EQUAL(file_sym, err);
-        if (err != file_sym) {
+        res = write(file, &file_sym, 1);
+        TEST_ASSERT_EQUAL(1, res);
+        if (res != 1) {
             return;
         }
     }
-    err = fclose(file);
+    err = close(file);
     TEST_ASSERT_EQUAL(0, err);
     if (err) {
         return;
@@ -440,18 +441,18 @@ void test_upload_download_file()
     err = ftp_client->download(remote_path, local_path);
     TEST_ASSERT_EQUAL(0, err);
     // 4. Validate local file
-    file = fopen(local_path, "rb");
-    TEST_ASSERT_NOT_NULL(file);
-    if (!file) {
+    file = open(local_path, O_RDONLY);
+    TEST_ASSERT_TRUE(file >= 0);
+    if (file < 0) {
         return;
     }
     int total_len = 0;
-    while ((sym = fgetc(file)) >= 0) {
+    while ((res = read(file, &sym, 1)) == 1) {
         total_len++;
         TEST_ASSERT_EQUAL(file_sym, sym);
     }
     TEST_ASSERT_EQUAL(file_size, total_len);
-    err = fclose(file);
+    err = close(file);
     TEST_ASSERT_EQUAL(0, err);
     if (err) {
         return;
