@@ -1,9 +1,9 @@
 #ifndef SIM5320_FTPCLIENT_H
 #define SIM5320_FTPCLIENT_H
 
-#include "CellularList.h"
 #include "ATHandler.h"
 #include "AT_CellularDevice.h"
+#include "CellularList.h"
 #include "mbed.h"
 
 namespace sim5320 {
@@ -293,10 +293,19 @@ public:
      * Download file from ftp server.
      *
      * @param remote_path ftp file path
-     * @param local_file local file descriptor
+     * @param local_file local file descriptor (use fopen function to get it)
      * @return 0 on success, non-zero on failure
      */
     nsapi_error_t download(const char *remote_path, FILE *local_file);
+
+    /**
+     * Download file from ftp server.
+     *
+     * @param remote_path ftp file path
+     * @param local_file local file descriptor (use open function to get it)
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t download(const char *remote_path, int local_file);
 
     /**
      * Upload file to ftp server.
@@ -310,11 +319,20 @@ public:
     /**
      * Upload file to ftp server.
      *
-     * @param local_file local file descriptor
+     * @param local_file local file descriptor (use fopen function to get it)
      * @param remote_path ftp file path
      * @return 0 on success, non-zero on failure
      */
     nsapi_error_t upload(FILE *local_file, const char *remote_path);
+
+    /**
+     * Upload file to ftp server.
+     *
+     * @param local_file local file descriptor (use open function to get it)
+     * @param remote_path ftp file path
+     * @return 0 on success, non-zero on failure
+     */
+    nsapi_error_t upload(int local_file, const char *remote_path);
 
 private:
     /**

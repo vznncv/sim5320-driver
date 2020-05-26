@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+
+- Add `SIM5320FTPClient::download` and `SIM5320FTPClient::upload` method version
+  that accepts integer file descriptor.
+
+### Changed
+
+- Refactor `SIM5320FTPClient::download` and `SIM5320FTPClient::upload` method to use system calls
+  `open`, `read`, `write`, `close` instead of `fopen`, `fread`, `fwrite`, `fclose` to reduce
+  dynamic memory operations.
+
 ## [0.2.0] - 2020-05-17
 ### Fixed
 
