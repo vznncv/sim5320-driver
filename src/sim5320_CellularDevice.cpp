@@ -102,6 +102,13 @@ nsapi_error_t SIM5320CellularDevice::init_at_interface()
     // disable STK function
     _at.cmd_start("AT+STK=0");
     _at.cmd_stop_read_resp();
+
+    // configure handlers at initialization step to prevent memory
+    // allocation during modem usage
+    // note: if AT_CellularDevice::setup_at_handler is dropped or changed,
+    // this invocation can be removed
+    setup_at_handler();
+
     return _at.get_last_error();
 }
 
