@@ -163,9 +163,8 @@ nsapi_error_t SIM5320LocationService::gps_read_coord(SIM5320LocationService::coo
         // parse date
         tm gps_tm;
         sscanf(date_str, "%2d%2d%2d", &gps_tm.tm_mday, &gps_tm.tm_mon, &gps_tm.tm_year);
-        float tm_sec;
-        sscanf(utc_time_str, "%2d%2d%f", &gps_tm.tm_hour, &gps_tm.tm_min, &tm_sec);
-        gps_tm.tm_sec = (int)tm_sec;
+        int sub_sec;
+        sscanf(utc_time_str, "%2d%2d%2d.%d", &gps_tm.tm_hour, &gps_tm.tm_min, &gps_tm.tm_sec, &sub_sec);
         gps_tm.tm_year += 100;
         gps_tm.tm_mon -= 1;
         // fill result
