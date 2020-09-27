@@ -1,10 +1,10 @@
 ﻿#include "sim5320_driver.h"
 #include "sim5320_CellularNetwork.h"
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
 
-#include "mbed_trace.h"
-#define TRACE_GROUP "sim5"
-
+using mbed::chrono::milliseconds_u32;
 using namespace sim5320;
 
 static const int SIM5320_SERIAL_BAUDRATE = 115200;
@@ -337,6 +337,8 @@ SIM5320TimeService *SIM5320::get_time_service()
     return _time_service;
 }
 
+constexpr milliseconds_u32 SIM5320::_STARTUP_TIMEOUT;
+
 nsapi_error_t SIM5320::_reset_soft()
 {
     {
@@ -360,10 +362,10 @@ nsapi_error_t SIM5320::_reset_hard()
     if (_rst_out_ptr) {
         // try using hardware pin
         _rst_out_ptr->write(0);
-        ThisThread::sleep_for(100);
+        ThisThread::sleep_for(100ms);
         _rst_out_ptr->write(1);
         // wait startup
-        ThisThread::sleep_for(200);
+        ThisThread::sleep_for(200ms);
         _at->flush();
         _at->clear_error();
         return _skip_initialization_messages();
@@ -376,7 +378,7 @@ nsapi_error_t SIM5320::_skip_initialization_messages()
 {
     int res;
 
-    ATHandlerLocker locker(*_at, _STARTUP_TIMEOUT_MS);
+    ATHandlerLocker locker(*_at, _STARTUP_TIMEOUT);
     _at->resp_start("START", true);
     res = _at->get_last_error();
     // if there is not error, wait PB DONE

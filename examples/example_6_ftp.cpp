@@ -36,17 +36,16 @@ using namespace sim5320;
 #define FTP_DEMO_FILE "/debian/README"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                           \
-    {                                                                                  \
-        int err = expr;                                                                \
-        if (err < 0) {                                                                 \
-            char err_msg[64];                                                          \
-            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
-        }                                                                              \
+static int _check_ret_code(int res, const char *expr)
+{
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
-
-DigitalOut led(APP_LED);
+    return res;
+}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
 
 #define SEPARATOR_WIDTH 80
 
@@ -71,6 +70,12 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     printf(" %s ", header);
     print_separator(right_sep, sep_r_n);
 }
+
+/**
+ * Main code
+ */
+
+static DigitalOut led(APP_LED);
 
 int main()
 {
@@ -131,7 +136,7 @@ int main()
     printf("Complete!\n");
 
     while (1) {
-        ThisThread::sleep_for(500);
+        ThisThread::sleep_for(500ms);
         led = !led;
     }
 }

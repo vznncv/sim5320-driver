@@ -8,17 +8,19 @@
  *  note: it uses public FTP server, so you don't need your own server, but it doesn't test whole functionality
  */
 
-#include "greentea-client/test_env.h"
-#include "math.h"
+#include <math.h>
+#include <string.h>
+
+#include "LittleFileSystem.h"
 #include "mbed.h"
-#include "rtos.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
+
+#include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
 
-#include "LittleFileSystem.h"
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
+#include "sim5320_utils.h"
 
 using namespace utest::v1;
 using namespace sim5320;
@@ -27,7 +29,7 @@ static sim5320::SIM5320 *modem;
 static FileSystem *fs;
 static BlockDevice *block_device;
 
-utest::v1::status_t test_setup_handler(const size_t number_of_cases)
+static utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
     modem->init();
@@ -52,7 +54,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     return unite_utest_status_with_err(greentea_test_setup_handler(number_of_cases), err);
 }
 
-void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
+static void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
 {
     // detach from network
     CellularContext *cellular_context = modem->get_context();
@@ -69,7 +71,7 @@ void test_teardown_handler(const size_t passed, const size_t failed, const failu
     return greentea_test_teardown_handler(passed, failed, failure);
 }
 
-utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
+static utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     // clear file system
     fs->reformat(block_device);
@@ -213,13 +215,13 @@ void test_common()
 
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, case_setup_handler, test_fun, greentea_case_teardown_handler, greentea_case_failure_continue_handler)
-Case cases[] = {
+static Case cases[] = {
     SIM5320Case(test_ftp_connect),
     SIM5320Case(test_ftps_explicit_connect),
     SIM5320Case(test_ftps_implicit_connect),
     SIM5320Case(test_common),
 };
-Specification specification(test_setup_handler, cases, test_teardown_handler);
+static Specification specification(test_setup_handler, cases, test_teardown_handler);
 
 // Entry point into the tests
 int main()

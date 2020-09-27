@@ -1,9 +1,9 @@
 #ifndef SIM5320_TIMESERVICE_H
 #define SIM5320_TIMESERVICE_H
 
-#include "ATHandler.h"
-#include "AT_CellularDevice.h"
 #include "mbed.h"
+
+#include "ATHandler.h"
 
 namespace sim5320 {
 
@@ -13,10 +13,9 @@ namespace sim5320 {
 class SIM5320TimeService : private NonCopyable<SIM5320TimeService> {
 protected:
     ATHandler &_at;
-    AT_CellularDevice &_device;
 
 public:
-    SIM5320TimeService(ATHandler &at, AT_CellularDevice &device);
+    SIM5320TimeService(ATHandler &at);
     virtual ~SIM5320TimeService();
 
 private:

@@ -19,7 +19,7 @@ The library allows:
 - establish UPD connections
 - work with FTP/FTPS servers
 
-The library is compatible with a mbed-os 5.13.4 or higher.
+The library is compatible with a mbed-os 6.3 or higher.
 
 ## Driver usage
 

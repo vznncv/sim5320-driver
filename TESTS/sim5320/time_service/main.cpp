@@ -5,14 +5,19 @@
  * - active SIM card
  * - an aviable network.
  */
-#include "greentea-client/test_env.h"
+#include <math.h>
+#include <string.h>
+#include <time.h>
+
 #include "mbed.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
+
+#include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
-#include <time.h>
+
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
+#include "sim5320_utils.h"
 
 using namespace utest::v1;
 using namespace sim5320;
@@ -66,10 +71,10 @@ void test_sync_time()
 
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, lib_case_setup_handler, test_fun, lib_case_teardown_handler, greentea_case_failure_continue_handler)
-Case cases[] = {
+static Case cases[] = {
     SIM5320Case(test_sync_time),
 };
-Specification specification(lib_test_setup_handler, cases, lib_test_teardown_handler);
+static Specification specification(lib_test_setup_handler, cases, lib_test_teardown_handler);
 
 // Entry point into the tests
 int main()

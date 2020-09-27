@@ -1,9 +1,19 @@
+/**
+ * Helper module with utility functions/classes for internal usage.
+ *
+ * It shouldn't be used/included by non-library code.
+ */
 #ifndef SIM5320_UTILS_H
 #define SIM5320_UTILS_H
+
+#include <chrono>
+#include <cstdarg>
+
+#include "mbed.h"
+
 #include "ATHandler.h"
 #include "CellularLog.h"
-#include "mbed.h"
-#include "stdarg.h"
+
 namespace sim5320 {
 
 static const int SIM5320_DEFAULT_TIMEOUT = 8000;
@@ -171,11 +181,37 @@ nsapi_error_t at_cmdw_set_ii(ATHandler &at, const char *cmd, int value_1, int va
 nsapi_error_t at_cmdw_get_ii(ATHandler &at, const char *cmd, int &value_1, int &value_2, bool lock = true);
 
 /**
+ * Helper simplified string parser to parse complex strings that are returned by AT command reponces (like time or gps coordinates).
+ *
+ * Note: the implementation isn't thread-safe.
+ */
+class SimpleStringParser : NonCopyable<SimpleStringParser> {
+protected:
+    int _err;
+    const char *_str;
+
+public:
+    SimpleStringParser(const char *str);
+
+    int consume_int(int *result, int limit = -1);
+    int consume_literal(const char *str);
+    int consume_char(char *sym);
+    int consume_string_until_sep(char *buf, size_t len, char sep);
+    int get_error();
+    bool is_finshed();
+};
+
+/**
  * Helper object to lock @c ATHandler object using RAII approach.
  */
 class ATHandlerLocker {
 public:
-    ATHandlerLocker(ATHandler &at, int timeout = -1);
+    ATHandlerLocker(ATHandler &at, mbed::chrono::milliseconds_u32 timeout);
+    ATHandlerLocker(ATHandler &at, int timeout = 0)
+        : ATHandlerLocker(at, mbed::chrono::milliseconds_u32(timeout))
+    {
+    }
+
     ~ATHandlerLocker();
 
     /**
@@ -187,35 +223,8 @@ public:
 
 private:
     ATHandler &_at;
-    int _timeout;
+    mbed::chrono::milliseconds_u32 _timeout;
     int _lock_count;
 };
-
-/**
- * Helper class to manage objects with RAII approach.
- *
- * It's created for internal usage and shouldn't be used directly.
- */
-//template <typename TObj, typename TAMRet, TAMRet (TObj::*acquire_method)(), typename TRMRet, TRMRet (TObj::*release_method)()>
-//class BaseGuard {
-//private:
-//    BaseGuard(BaseGuard const &) = delete;
-//    BaseGuard &operator=(BaseGuard const &) = delete;
-//    TObj *_obj;
-//public:
-//    BaseGuard(TObj *obj)
-//        : _obj(obj)
-//    {
-//        (*_obj.*acquire_method)();
-//    }
-//    BaseGuard(TObj &obj)
-//        : BaseGuard(&obj)
-//    {
-//    }
-//    ~BaseGuard()
-//    {
-//        (*_obj.*release_method)();
-//    }
-//};
 }
 #endif // SIM5320_UTILS_H

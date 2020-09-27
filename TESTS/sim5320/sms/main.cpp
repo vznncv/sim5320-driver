@@ -7,15 +7,19 @@
  * - SIM subscriber number that is set using test_sim_subscriber_number, or is located in the SIM card memory (see CNUM command)
  */
 
-#include "greentea-client/test_env.h"
-#include "math.h"
+#include <chrono>
+#include <math.h>
+#include <string.h>
+
 #include "mbed.h"
-#include "rtos.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
+
+#include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
+
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
+#include "sim5320_utils.h"
 
 #if not MBED_CONF_CELLULAR_USE_SMS
 #error "To run SMS test, the cellular.use-sms option must be enabled"
@@ -39,7 +43,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
     if (err) {
         return err;
@@ -50,7 +54,7 @@ static nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -76,7 +80,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
     modem->init();
     ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->reset());
-    ThisThread::sleep_for(500);
+    ThisThread::sleep_for(500ms);
     // set PIN if we have it
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
@@ -113,7 +117,7 @@ void test_teardown_handler(const size_t passed, const size_t failed, const failu
     return greentea_test_teardown_handler(passed, failed, failure);
 }
 
-utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
+static utest::v1::status_t case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     return greentea_case_setup_handler(source, index_of_case);
 }
@@ -234,7 +238,7 @@ void test_sms_workflow()
         if (sms_reader.sms_count > 0) {
             break;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
 
     // 7. check sms
@@ -251,11 +255,11 @@ void test_sms_workflow()
 
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, case_setup_handler, test_fun, greentea_case_teardown_handler, greentea_case_failure_continue_handler)
-Case cases[] = {
+static Case cases[] = {
     SIM5320Case(test_get_sms),
     SIM5320Case(test_sms_workflow)
 };
-Specification specification(test_setup_handler, cases, test_teardown_handler);
+static Specification specification(test_setup_handler, cases, test_teardown_handler);
 
 // Entry point into the tests
 int main()

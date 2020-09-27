@@ -6,18 +6,18 @@
  * - an aviable network
  * - your server with private write permissions
  */
+#include <math.h>
+#include <string.h>
+
+#include "LittleFileSystem.h"
+#include "mbed.h"
 
 #include "greentea-client/test_env.h"
-#include "math.h"
-#include "mbed.h"
-#include "rtos.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
 #include "unity.h"
 #include "utest.h"
 
-#include "LittleFileSystem.h"
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 
 using namespace utest::v1;
 using namespace sim5320;
@@ -75,7 +75,7 @@ static int prepare_test_dir(SIM5320FTPClient *ftp_client, const char *test_dir)
         }                                                 \
     } while (0);
 
-utest::v1::status_t test_setup_handler(const size_t number_of_cases)
+static utest::v1::status_t test_setup_handler(const size_t number_of_cases)
 {
     // ignore tests if FTP URL isn't set
     if (strlen(MBED_CONF_SIM5320_DRIVER_TEST_FTP_READ_WRITE_OPERATIONS_URL) == 0) {
@@ -85,7 +85,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     modem = new SIM5320(MBED_CONF_SIM5320_DRIVER_TEST_UART_TX, MBED_CONF_SIM5320_DRIVER_TEST_UART_RX, NC, NC, MBED_CONF_SIM5320_DRIVER_TEST_RESET_PIN);
     modem->init();
     ABORT_TEST_SETUP_HANDLER_IF_ERROR(modem->reset());
-    ThisThread::sleep_for(500);
+    ThisThread::sleep_for(500ms);
     // set PIN if we have it
     const char *pin = MBED_CONF_SIM5320_DRIVER_TEST_SIM_PIN;
     if (strlen(pin) > 0) {
@@ -114,7 +114,7 @@ utest::v1::status_t test_setup_handler(const size_t number_of_cases)
     return greentea_test_setup_handler(number_of_cases);
 }
 
-void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
+static void test_teardown_handler(const size_t passed, const size_t failed, const failure_t failure)
 {
     // disconnect from ftp server
     if (ftp_client) {
@@ -155,7 +155,7 @@ utest::v1::status_t case_setup_handler(const Case *const source, const size_t in
 void test_listdir()
 {
     int err;
-    char path_buf[128];
+    static char path_buf[128];
 
     // create test file and directory
     sprintf(path_buf, "%s/%s", test_dir, "some_file.txt");
@@ -461,7 +461,7 @@ void test_upload_download_file()
 
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, case_setup_handler, test_fun, greentea_case_teardown_handler, greentea_case_failure_continue_handler)
-Case cases[] = {
+static Case cases[] = {
     SIM5320Case(test_listdir),
     SIM5320Case(test_rmfile),
     SIM5320Case(test_rmdir),
@@ -470,7 +470,7 @@ Case cases[] = {
     SIM5320Case(test_upload_download_file)
 
 };
-Specification specification(test_setup_handler, cases, test_teardown_handler);
+static Specification specification(test_setup_handler, cases, test_teardown_handler);
 
 // Entry point into the tests
 int main()

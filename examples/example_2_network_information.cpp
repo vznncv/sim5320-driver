@@ -25,50 +25,19 @@ using namespace sim5320;
 #define MODEM_SIM_PIN ""
 #define APP_LED LED2
 
-#define CHECK_RET_CODE(expr)                                                           \
-    {                                                                                  \
-        int err = expr;                                                                \
-        if (err < 0) {                                                                 \
-            char err_msg[64];                                                          \
-            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
-        }                                                                              \
-    }
-
-DigitalOut led(APP_LED);
-
-nsapi_error_t attach_to_network(SIM5320 *sim5320)
+/**
+ * Helper functions
+ */
+static int _check_ret_code(int res, const char *expr)
 {
-    nsapi_error_t err = 0;
-    CellularNetwork::AttachStatus attach_status;
-    CellularNetwork *cellular_network = sim5320->get_network();
-
-    for (int i = 0; i < 10; i++) {
-        err = cellular_network->set_attach();
-        if (!err) {
-            break;
-        }
-        ThisThread::sleep_for(1000);
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
-    if (err) {
-        return err;
-    }
-
-    for (int i = 0; i < 30; i++) {
-        cellular_network->get_attach(attach_status);
-        if (attach_status == CellularNetwork::Attached) {
-            return NSAPI_ERROR_OK;
-        }
-        ThisThread::sleep_for(1000);
-    }
-    return NSAPI_ERROR_TIMEOUT;
+    return res;
 }
-
-nsapi_error_t detach_from_network(SIM5320 *sim5320)
-{
-    CellularNetwork *cellular_network = sim5320->get_network();
-    return cellular_network->detach();
-}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
 
 static const char *get_nw_registering_mode_name(CellularNetwork::NWRegisteringMode mode)
 {
@@ -197,6 +166,45 @@ static const char *get_reg_status_name(CellularNetwork::RegistrationStatus statu
     }
 }
 
+/**
+ * Main code
+ */
+
+static DigitalOut led(APP_LED);
+
+nsapi_error_t attach_to_network(SIM5320 *sim5320)
+{
+    nsapi_error_t err = 0;
+    CellularNetwork::AttachStatus attach_status;
+    CellularNetwork *cellular_network = sim5320->get_network();
+
+    for (int i = 0; i < 10; i++) {
+        err = cellular_network->set_attach();
+        if (!err) {
+            break;
+        }
+        ThisThread::sleep_for(1000ms);
+    }
+    if (err) {
+        return err;
+    }
+
+    for (int i = 0; i < 30; i++) {
+        cellular_network->get_attach(attach_status);
+        if (attach_status == CellularNetwork::Attached) {
+            return NSAPI_ERROR_OK;
+        }
+        ThisThread::sleep_for(1000ms);
+    }
+    return NSAPI_ERROR_TIMEOUT;
+}
+
+nsapi_error_t detach_from_network(SIM5320 *sim5320)
+{
+    CellularNetwork *cellular_network = sim5320->get_network();
+    return cellular_network->detach();
+}
+
 static void format_nw_operator(char *buf, CellularNetwork::operator_t *nw_operator_ptr)
 {
     sprintf(buf, "%s/%s/%s - %s (%s)", nw_operator_ptr->op_long, nw_operator_ptr->op_short, nw_operator_ptr->op_num,
@@ -294,8 +302,8 @@ int main()
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 
-    while (1) {
-        ThisThread::sleep_for(500);
+    while (true) {
+        ThisThread::sleep_for(500ms);
         led = !led;
     }
 }

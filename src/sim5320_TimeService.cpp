@@ -1,12 +1,15 @@
-#include "sim5320_TimeService.h"
-#include "sim5320_utils.h"
 #include <stdio.h>
 #include <string.h>
+
+#include "sim5320_TimeService.h"
+
+#include "sim5320_trace.h"
+#include "sim5320_utils.h"
+
 using namespace sim5320;
 
-SIM5320TimeService::SIM5320TimeService(ATHandler &at, AT_CellularDevice &device)
+SIM5320TimeService::SIM5320TimeService(ATHandler &at)
     : _at(at)
-    , _device(device)
     , _htp_servers(nullptr)
     , _htp_servers_num(0)
 {
@@ -42,10 +45,20 @@ nsapi_error_t SIM5320TimeService::_sync_time_with_htp_servers(const char *const 
 
     // add servers
     for (size_t i = 0; i < size; i++) {
-        n = sscanf(servers[i], "%[^:]:%i", hostname, &port);
-        if (n <= 1) {
+        SimpleStringParser parser(servers[i]);
+        parser.consume_string_until_sep(hostname, hostname_size, ':');
+        if (parser.is_finshed()) {
             port = 80;
+        } else {
+            parser.consume_literal(":");
+            parser.consume_int(&port);
         }
+
+        if (parser.get_error()) {
+            tr_error("Fail to parse http server for time extration");
+            continue;
+        }
+
         _at.at_cmd_discard("+CHTPSERV", "=", "%s%s%d%d", "ADD", hostname, port, i);
     }
 
@@ -74,7 +87,7 @@ nsapi_error_t SIM5320TimeService::_sync_time_with_htp_servers(const char *const 
 nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
 {
     ATHandlerLocker locker(_at);
-    const char timestamp_buf_size = 32;
+    const size_t timestamp_buf_size = 24;
     int err;
     struct tm tm;
     int n, n_arg, tz;
@@ -87,12 +100,6 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
     _at.resp_start("+CCLK:");
     // expect output: "yy/mm/dd,hh:mm:ss+tz"
     read_len = _at.read_string(timestamp_buf, timestamp_buf_size);
-    // hack to fix handle bug if `read_string` consumes only "yy/mm/dd" part, but ignore part after a comma
-    // see: https://github.com/ARMmbed/mbed-os/issues/12760
-    if (read_len == 8) {
-        timestamp_buf[8] = ',';
-        _at.read_string(timestamp_buf + 9, timestamp_buf_size - 9);
-    }
     _at.resp_stop();
     err = _at.get_last_error();
     if (err) {
@@ -100,14 +107,26 @@ nsapi_error_t SIM5320TimeService::_read_modem_clk(time_t *time)
     }
 
     // parse timestamp
-    tz = 0;
-    n_arg = sscanf(timestamp_buf, "%i/%i/%i,%i:%i:%2i%i%n", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec, &tz, &n);
-    if (strlen(timestamp_buf) != n) {
-        // fail to parse timestamp
-        return -1;
-    }
-    if (n_arg == 6) {
+    SimpleStringParser parser(timestamp_buf);
+    parser.consume_int(&tm.tm_year);
+    parser.consume_literal("/");
+    parser.consume_int(&tm.tm_mon);
+    parser.consume_literal("/");
+    parser.consume_int(&tm.tm_mday);
+    parser.consume_literal(",");
+    parser.consume_int(&tm.tm_hour);
+    parser.consume_literal(":");
+    parser.consume_int(&tm.tm_min);
+    parser.consume_literal(":");
+    parser.consume_int(&tm.tm_sec, 2);
+    if (parser.is_finshed()) {
         tz = 0;
+    } else {
+        parser.consume_int(&tz);
+    }
+    if (parser.get_error()) {
+        // fail to parse timestamp
+        return parser.get_error();
     }
 
     // adjust month and year

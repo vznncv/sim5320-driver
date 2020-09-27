@@ -1,7 +1,10 @@
 #ifndef SIM5320_CELLULARCONTEXT_H
 #define SIM5320_CELLULARCONTEXT_H
-#include "AT_CellularContext.h"
+
 #include "mbed.h"
+
+#include "AT_CellularContext.h"
+
 #include "sim5320_CellularDevice.h"
 
 namespace sim5320 {

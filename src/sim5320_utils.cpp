@@ -1,5 +1,11 @@
+#include "mbed_assert.h"
+
 #include "sim5320_utils.h"
+
+#include <limits.h>
 #include <string.h>
+
+using namespace sim5320;
 
 int sim5320::read_full_fuzzy_response(ATHandler &at, bool wait_response_after_ok, bool wait_response_after_error, const char *prefix, const char *format_string, ...)
 {
@@ -22,7 +28,7 @@ static int vread_full_fuzzy_response_values(mbed::ATHandler &at, const char *for
 
     while ((current_sym = *(format_string++)) != '\0') {
         if (format_seq) {
-            if (current_sym == 'i') {
+            if (current_sym == 'i' || current_sym == 'd') {
                 int *dst_int_ptr = va_arg(arg, int *);
 
                 read_res = at.read_int();
@@ -92,22 +98,21 @@ int sim5320::vread_full_fuzzy_response(ATHandler &at, bool wait_response_after_o
     return err ? err : result;
 }
 
-sim5320::ATHandlerLocker::ATHandlerLocker(ATHandler &at, int timeout)
+ATHandlerLocker::ATHandlerLocker(ATHandler &at, mbed::chrono::milliseconds_u32 timeout)
     : _at(at)
     , _timeout(timeout)
     , _lock_count(1)
 {
     _at.lock();
-    if (timeout >= 0) {
+    if (timeout > 0ms) {
         _at.set_at_timeout(timeout);
     }
 }
 
 sim5320::ATHandlerLocker::~ATHandlerLocker()
 {
-    if (_timeout >= 0) {
+    if (_timeout > 0ms) {
         _at.restore_at_timeout();
-        //_at.set_at_timeout(SIM5320_DEFAULT_TIMEOUT, true);
     }
     for (int i = 0; i < _lock_count; i++) {
         _at.unlock();
@@ -266,4 +271,127 @@ nsapi_error_t sim5320::at_cmdw_get_ii(ATHandler &at, const char *cmd, int &value
     at.resp_stop();
 
     return at_cmdw_unlock_return_error(at, lock);
+}
+
+SimpleStringParser::SimpleStringParser(const char *str)
+    : _str(str)
+    , _err(0)
+{
+    MBED_ASSERT(str != nullptr);
+}
+
+int SimpleStringParser::consume_int(int *result, int limit)
+{
+    const char *pos = _str;
+    int res = 0;
+    bool neg_sign = false;
+    bool has_digits = false;
+
+    if (_err) {
+        return _err;
+    }
+
+    if (limit < 0) {
+        limit = INT_MAX;
+    }
+
+    // check sign
+    if (*pos == '+' || *pos == '-') {
+        pos++;
+        limit--;
+        if (*pos == '-') {
+            neg_sign = true;
+        }
+    }
+    // process number
+    while (*pos >= '0' && *pos <= '9' && limit > 0) {
+        res = res * 10 + (*pos - '0');
+        pos++;
+        limit--;
+        has_digits = true;
+    }
+    // check results
+    if (!has_digits) {
+        _err = -1;
+    } else {
+        if (neg_sign) {
+            res = -res;
+        }
+        *result = res;
+        _str = pos;
+    }
+    return _err;
+}
+
+int SimpleStringParser::consume_literal(const char *str)
+{
+    const char *pos = _str;
+
+    if (_err) {
+        return _err;
+    }
+
+    while (*str != '\0') {
+        if (*str != *pos) {
+            _err = -1;
+            break;
+        }
+        str++;
+        pos++;
+    }
+    if (!_err) {
+        _str = pos;
+    }
+    return _err;
+}
+
+int SimpleStringParser::consume_char(char *sym)
+{
+    if (_err) {
+        return _err;
+    }
+
+    if (*_str == '\0') {
+        _err = -1;
+        return _err;
+    }
+
+    *sym = *_str;
+    _str++;
+
+    return _err;
+}
+
+int SimpleStringParser::consume_string_until_sep(char *buf, size_t len, char sep)
+{
+    const char *pos = _str;
+    int res;
+
+    MBED_ASSERT(len > 0);
+
+    if (_err) {
+        return _err;
+    }
+
+    while (*pos != '\0' && len > 1 && *pos != sep) {
+        *buf = *pos;
+        buf++;
+        pos++;
+        len--;
+    }
+    *buf = '\0';
+
+    res = pos - _str;
+    _str = pos;
+    return res;
+}
+
+int SimpleStringParser::get_error()
+{
+    return _err;
+}
+
+bool SimpleStringParser::is_finshed()
+{
+    return *_str == '\0';
 }
