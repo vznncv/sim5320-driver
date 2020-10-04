@@ -32,15 +32,16 @@ using namespace sim5320;
  */
 #define SUBSCRIBER_NUMBER "CNUM"
 
-#define CHECK_RET_CODE(expr)                                                                              \
-    {                                                                                                     \
-        int err = expr;                                                                                   \
-        if (err < 0) {                                                                                    \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), "Expression \"" #expr "\" failed"); \
-        }                                                                                                 \
+static int _check_ret_code(int res, const char *expr)
+{
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
-
-DigitalOut led(APP_LED);
+    return res;
+}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
 
 #define SEPARATOR_WIDTH 80
 
@@ -66,6 +67,10 @@ void print_header(const char *header, const char left_sep = '-', const char righ
     print_separator(right_sep, sep_r_n);
 }
 
+/**
+ * Main code
+ */
+
 nsapi_error_t attach_to_network(SIM5320 *sim5320)
 {
     nsapi_error_t err = 0;
@@ -77,7 +82,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (!err) {
             break;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
     if (err) {
         return err;
@@ -88,7 +93,7 @@ nsapi_error_t attach_to_network(SIM5320 *sim5320)
         if (attach_status == CellularNetwork::Attached) {
             return NSAPI_ERROR_OK;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
     return NSAPI_ERROR_TIMEOUT;
 }
@@ -153,6 +158,8 @@ struct sms_reader_t {
     }
 };
 
+static DigitalOut led(APP_LED);
+
 int main()
 {
     // create driver
@@ -215,7 +222,7 @@ int main()
         if (sms_reader.sms_count > 0) {
             break;
         }
-        ThisThread::sleep_for(1000);
+        ThisThread::sleep_for(1000ms);
     }
     if (sms_reader.sms_count == 0) {
         printf("Fail. SMS isn't received!!!\n");
@@ -229,8 +236,8 @@ int main()
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 
-    while (1) {
-        ThisThread::sleep_for(500);
+    while (true) {
+        ThisThread::sleep_for(500ms);
         led = !led;
     }
 }

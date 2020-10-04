@@ -1,12 +1,18 @@
 #ifndef SIM5320_CELLULARDEVICE_H
 #define SIM5320_CELLULARDEVICE_H
 
+#include "mbed.h"
+
 #include "AT_CellularDevice.h"
+
 #include "CellularContext.h"
 #include "CellularInformation.h"
 #include "CellularNetwork.h"
 #include "CellularSMS.h"
-#include "mbed.h"
+
+#include "sim5320_CellularInformation.h"
+#include "sim5320_CellularNetwork.h"
+#include "sim5320_CellularSMS.h"
 #include "sim5320_FTPClient.h"
 #include "sim5320_LocationService.h"
 #include "sim5320_TimeService.h"
@@ -54,6 +60,48 @@ public:
     // AT_CellularDevice
     virtual nsapi_error_t init() override;
 
+    static const size_t SUBSCRIBER_NUMBER_MAX_LEN = 16;
+
+    /**
+     * Get subscriber number.
+     *
+     * If subscriber isn't set, an empty string will be returned.
+     *
+     * @param number output buffer. It should have size at least SUBSCRIBER_NUMBER_MAX_LEN
+     * @return 0 on success, otherwise non-zero value
+     */
+    virtual nsapi_error_t get_subscriber_number(char *number);
+
+    /**
+     * Set default subscriber number.
+     *
+     * @param number
+     * @return
+     */
+    virtual nsapi_error_t set_subscriber_number(const char *number);
+
+    //--------------------------------
+    // Device interfaces
+    //--------------------------------
+
+    //
+    // Base cellular device interfaces
+    //
+
+    virtual CellularInformation *open_information() override;
+    virtual void close_information() override;
+
+    virtual CellularNetwork *open_network() override;
+    virtual void close_network() override;
+
+#if MBED_CONF_CELLULAR_USE_SMS
+    virtual CellularSMS *open_sms() override;
+    virtual void close_sms() override;
+#endif //MBED_CONF_CELLULAR_USE_SMS
+    //
+    // sim5320 specific interfaces
+    //
+
     /**
      * Get location service interface.
      *
@@ -93,39 +141,21 @@ public:
     */
     virtual void close_time_service();
 
-    static const size_t SUBSCRIBER_NUMBER_MAX_LEN = 16;
-
-    /**
-     * Get subscriber number.
-     *
-     * If subscriber isn't set, an empty string will be returned.
-     *
-     * @param number output buffer. It should have size at least SUBSCRIBER_NUMBER_MAX_LEN
-     * @return 0 on success, otherwise non-zero value
-     */
-    virtual nsapi_error_t get_subscriber_number(char *number);
-
-    /**
-     * Set default subscriber number.
-     *
-     * @param number
-     * @return
-     */
-    virtual nsapi_error_t set_subscriber_number(const char *number);
-
+protected:
     // AT_CellularDevice
-    virtual AT_CellularInformation *open_information_impl(ATHandler &at) override;
-    virtual AT_CellularNetwork *open_network_impl(ATHandler &at) override;
     virtual AT_CellularContext *create_context_impl(ATHandler &at, const char *apn, bool cp_req = false, bool nonip_req = false) override;
+
+    // device specific implementation
+    virtual SIM5320CellularInformation *open_information_base_impl(ATHandler &at);
+    virtual SIM5320CellularNetwork *open_network_base_impl(ATHandler &at);
 #if MBED_CONF_CELLULAR_USE_SMS
-    virtual AT_CellularSMS *open_sms_impl(ATHandler &at) override;
+    virtual SIM5320CellularSMS *open_sms_base_impl(ATHandler &at);
 #endif // MBED_CONF_CELLULAR_USE_SMS
 
-    virtual SIM5320LocationService *open_location_service_impl(ATHandler &at);
-    virtual SIM5320FTPClient *open_ftp_client_impl(ATHandler &at);
-    virtual SIM5320TimeService *open_time_service_impl(ATHandler &at);
+    virtual SIM5320LocationService *open_location_service_base_impl(ATHandler &at);
+    virtual SIM5320FTPClient *open_ftp_client_base_impl(ATHandler &at);
+    virtual SIM5320TimeService *open_time_service_base_impl(ATHandler &at);
 
-protected:
     /**
      * Helper class to close and open interfaces.
      */
@@ -166,9 +196,15 @@ protected:
         }
     };
 
-    DeviceInterfaceManager<SIM5320LocationService, &SIM5320CellularDevice::open_location_service_impl> _location_service;
-    DeviceInterfaceManager<SIM5320FTPClient, &SIM5320CellularDevice::open_ftp_client_impl> _ftp_client;
-    DeviceInterfaceManager<SIM5320TimeService, &SIM5320CellularDevice::open_time_service_impl> _time_service;
+    DeviceInterfaceManager<SIM5320CellularInformation, &SIM5320CellularDevice::open_information_base_impl> _information_service;
+    DeviceInterfaceManager<SIM5320CellularNetwork, &SIM5320CellularDevice::open_network_base_impl> _network_service;
+#if MBED_CONF_CELLULAR_USE_SMS
+    DeviceInterfaceManager<SIM5320CellularSMS, &SIM5320CellularDevice::open_sms_base_impl> _sms_service;
+#endif // MBED_CONF_CELLULAR_USE_SMS
+
+    DeviceInterfaceManager<SIM5320LocationService, &SIM5320CellularDevice::open_location_service_base_impl> _location_service;
+    DeviceInterfaceManager<SIM5320FTPClient, &SIM5320CellularDevice::open_ftp_client_base_impl> _ftp_client;
+    DeviceInterfaceManager<SIM5320TimeService, &SIM5320CellularDevice::open_time_service_base_impl> _time_service;
 };
 }
 

@@ -1,21 +1,22 @@
 #include "sim5320_FTPClient.h"
-#include "mbed-trace/mbed_trace.h"
+
+#include "mbed_chrono.h"
+
+#include <chrono>
+#include <string.h>
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
-#include "string.h"
 
-#ifdef TRACE_GROUP
-#undef TRACE_GROUP
-#endif
-#define TRACE_GROUP "sim5320_ftp"
-
+using mbed::chrono::milliseconds_u32;
 using namespace sim5320;
-#define FTP_RESPONSE_TIMEOUT 24000
-#define FTP_DEVICE_TIMEOUT 20
 
-SIM5320FTPClient::SIM5320FTPClient(ATHandler &at, AT_CellularDevice &device)
+static constexpr milliseconds_u32 FTP_RESPONSE_TIMEOUT = 24s;
+static constexpr int FTP_DEVICE_TIMEOUT = 20;
+
+SIM5320FTPClient::SIM5320FTPClient(ATHandler &at)
     : _at(at)
-    , _device(device)
-    , _buffer(NULL)
+    , _buffer(nullptr)
     , _cleanup_buffer(false)
 {
 }
@@ -63,7 +64,15 @@ static int read_fuzzy_ftp_response(ATHandler &at, bool wait_response_after_ok, b
 {
     int err;
     int ftp_code;
-    err = read_full_fuzzy_response(at, wait_response_after_ok, wait_response_after_error, prefix, "%i", &ftp_code);
+    size_t len;
+    char full_prefix[16];
+
+    strcpy(full_prefix, prefix);
+    len = strlen(prefix);
+    full_prefix[len] = ':';
+    full_prefix[len] = '\0';
+
+    err = read_full_fuzzy_response(at, wait_response_after_ok, wait_response_after_error, full_prefix, "%i", &ftp_code);
     if (err >= 1) {
         return convert_ftp_error_code(ftp_code);
     } else if (err == 0) {
@@ -96,43 +105,32 @@ nsapi_error_t SIM5320FTPClient::connect(const char *host, int port, SIM5320FTPCl
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
     // start ftp stack
-    _at.cmd_start("AT+CFTPSSTART");
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTART:");
+    _at.cmd_start_stop("+CFTPSSTART", "", "");
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTART");
     if (err) {
         // try to stop and start stack again
         _at.clear_error();
-        _at.cmd_start("AT+CFTPSSTOP");
-        _at.cmd_stop();
-        read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTOP:");
+        _at.cmd_start_stop("+CFTPSSTOP", "", "");
+        read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTOP");
         _at.clear_error();
-        _at.cmd_start("AT+CFTPSSTART");
-        _at.cmd_stop();
-        read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTART:");
+        _at.cmd_start_stop("+CFTPSSTART", "", "");
+
+        read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTART");
     }
     _at.clear_error(); // ignore errors
 
     // set action timeout
-    _at.cmd_start("AT+CFTPSTO=");
-    _at.write_int(FTP_DEVICE_TIMEOUT);
-    _at.cmd_stop_read_resp();
+    _at.at_cmd_discard("+CFTPSTO", "=", "%d", FTP_DEVICE_TIMEOUT);
     _at.clear_error();
 
     // connect to server
-    _at.cmd_start("AT+CFTPSLOGIN=");
-    _at.write_string(host);
-    _at.write_int(port);
-    _at.write_string(username);
-    _at.write_string(password);
-    _at.write_int(protocol);
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSLOGIN:");
+    _at.cmd_start_stop("+CFTPSLOGIN", "=", "%s%d%s%s%d", host, port, username, password, protocol);
+    err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSLOGIN");
     RETURN_IF_ERROR(err);
 
     // set binary transfer type
-    _at.cmd_start("AT+CFTPSTYPE=I");
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSTYPE:");
+    _at.cmd_start_stop("+CFTPSTYPE", "=I");
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSTYPE");
     RETURN_IF_ERROR(err);
 
     return NSAPI_ERROR_OK;
@@ -174,11 +172,11 @@ nsapi_error_t SIM5320FTPClient::connect(const char *address)
 
     // parse username and password
     at_sign_pos = strchr(address_pos, '@');
-    if (at_sign_pos != NULL) {
+    if (at_sign_pos != nullptr) {
         // parse user and password
         *at_sign_pos = '\0';
         column_pos = strchr(address_pos, ':');
-        if (column_pos == NULL) {
+        if (column_pos == nullptr) {
             return NSAPI_ERROR_PARAMETER;
         }
         *column_pos = '\0';
@@ -193,7 +191,7 @@ nsapi_error_t SIM5320FTPClient::connect(const char *address)
 
     // parse host and port
     column_pos = strchr(address_pos, ':');
-    if (column_pos == NULL) {
+    if (column_pos == nullptr) {
         // use default port
         host = address_pos;
         port = 21;
@@ -216,28 +214,20 @@ nsapi_error_t SIM5320FTPClient::disconnect()
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
     // disconnect from server
-    _at.cmd_start("AT+CFTPSLOGOUT");
-    _at.cmd_stop();
-    read_fuzzy_ftp_response(_at, true, false, "+CFTPSLOGOUT:");
+    _at.cmd_start_stop("+CFTPSLOGOUT", "");
+    read_fuzzy_ftp_response(_at, true, false, "+CFTPSLOGOUT");
     _at.clear_error(); // if any error occurs, ignore it and try to stop ftp stack
 
     // stop stack
-    _at.cmd_start("AT+CFTPSSTOP");
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTOP:");
+    _at.cmd_start_stop("+CFTPSSTOP", "");
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSSTOP");
 
     return err;
 }
 
 nsapi_error_t SIM5320FTPClient::get_cwd(char *work_dir, size_t max_size)
 {
-    ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
-    _at.cmd_start("AT+CFTPSPWD");
-    _at.cmd_stop();
-    _at.resp_start("+CFTPSPWD:");
-    _at.read_string(work_dir, max_size);
-    _at.resp_stop();
-    return _at.get_last_error();
+    return _at.at_cmd_str("+CFTPSPWD", "", work_dir, max_size);
 }
 
 nsapi_error_t SIM5320FTPClient::set_cwd(const char *work_dir)
@@ -245,10 +235,8 @@ nsapi_error_t SIM5320FTPClient::set_cwd(const char *work_dir)
     int err;
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
-    _at.cmd_start("AT+CFTPSCWD=");
-    _at.write_string(work_dir);
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSCWD:");
+    _at.cmd_start_stop("+CFTPSCWD", "=", "%s", work_dir);
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSCWD");
     RETURN_IF_ERROR(err);
 
     return NSAPI_ERROR_OK;
@@ -260,9 +248,7 @@ nsapi_error_t SIM5320FTPClient::get_file_size(const char *path, long &size)
     int cmd_fsize;
 
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
-    _at.cmd_start("AT+CFTPSSIZE=");
-    _at.write_string(path);
-    _at.cmd_stop();
+    _at.cmd_start_stop("+CFTPSSIZE", "=", "%s", path);
     err = read_full_fuzzy_response(_at, false, false, "+CFTPSSIZE:", "%i%i", &ftp_code, &cmd_fsize);
 
     if (ftp_code == 0 && err == 2) {
@@ -334,10 +320,8 @@ nsapi_error_t SIM5320FTPClient::mkdir(const char *path)
     int err;
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
-    _at.cmd_start("AT+CFTPSMKD=");
-    _at.write_string(path);
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSMKD:");
+    _at.cmd_start_stop("+CFTPSMKD", "=", "%s", path);
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSMKD");
     RETURN_IF_ERROR(err);
 
     return NSAPI_ERROR_OK;
@@ -348,10 +332,8 @@ nsapi_error_t SIM5320FTPClient::rmdir(const char *path)
     int err;
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
-    _at.cmd_start("AT+CFTPSRMD=");
-    _at.write_string(path);
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSRMD:");
+    _at.cmd_start_stop("+CFTPSRMD", "=", "%s", path);
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSRMD");
     RETURN_IF_ERROR(err);
 
     return NSAPI_ERROR_OK;
@@ -368,7 +350,7 @@ nsapi_error_t SIM5320FTPClient::_rmtree_impl(char *path_buf, size_t path_buf_len
     if (err) {
         return err;
     }
-    for (dir_entry_ptr = dir_entry_list.get_head(); dir_entry_ptr != NULL; dir_entry_ptr = dir_entry_ptr->next) {
+    for (dir_entry_ptr = dir_entry_list.get_head(); dir_entry_ptr != nullptr; dir_entry_ptr = dir_entry_ptr->next) {
         size_t new_path_len = path_len + 1 + strlen(dir_entry_ptr->name);
         if (new_path_len >= path_buf_len) {
             err = MBED_ERROR_CODE_INVALID_SIZE;
@@ -415,18 +397,15 @@ nsapi_error_t SIM5320FTPClient::rmfile(const char *path)
     int err;
     ATHandlerLocker locker(_at, FTP_RESPONSE_TIMEOUT);
 
-    _at.cmd_start("AT+CFTPSDELE=");
-    _at.write_string(path);
-    _at.cmd_stop();
-
-    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSDELE:");
+    _at.cmd_start_stop("+CFTPSDELE", "=", "%s", path);
+    err = read_fuzzy_ftp_response(_at, false, false, "+CFTPSDELE");
     RETURN_IF_ERROR(err);
 
     return NSAPI_ERROR_OK;
 }
 
 SIM5320FTPClient::dir_entry_t::dir_entry_t()
-    : name(NULL)
+    : name(nullptr)
     , d_type(DT_UNKNOWN)
 {
 }
@@ -509,7 +488,7 @@ nsapi_error_t SIM5320FTPClient::listdir(const char *path, SIM5320FTPClient::dir_
 
 #define PUT_UNSEND_MAX 4096
 #define PUT_UNSEND_MIN 128
-#define FTP_PUT_DATA_WAIT_TIMEOUT 1000
+static constexpr milliseconds_u32 FTP_PUT_DATA_WAIT_TIMEOUT = 1ms;
 #define FTP_HACK_BLOCK_SIZE 163840
 #define FTP_HACK_BLOCK_DELAY 1000
 
@@ -538,11 +517,7 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
         if (pending_data_i >= PUT_UNSEND_MAX) {
             // wait till output buffer become empty almost empty
             while (true) {
-                _at.cmd_start("AT+CFTPSPUT?");
-                _at.cmd_stop();
-                _at.resp_start("+CFTPSPUT:");
-                pending_data_i = _at.read_int();
-                _at.resp_stop();
+                _at.at_cmd_int("+CFTPSPUT", "?", pending_data_i, "");
                 // exit if error
                 if (_at.get_last_error()) {
                     break;
@@ -573,13 +548,12 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
         }
 
         // send data
-        _at.cmd_start("AT+CFTPSPUT=");
         if (path) {
-            _at.write_string(path);
-            path = NULL;
+            _at.cmd_start_stop("+CFTPSPUT", "=", "%s%d", path, block_size);
+            path = nullptr;
+        } else {
+            _at.cmd_start_stop("+CFTPSPUT", "=", "%d", block_size);
         }
-        _at.write_int(block_size);
-        _at.cmd_stop();
 
         _at.resp_start(">", true);
         _at.write_bytes((uint8_t *)buf, block_size);
@@ -594,9 +568,8 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
     // mark that transmission has been finished, even error occurs
     err = _at.get_last_error();
     _at.clear_error();
-    _at.cmd_start("AT+CFTPSPUT");
-    _at.cmd_stop();
-    err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSPUT:");
+    _at.cmd_start_stop("+CFTPSPUT", "");
+    err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSPUT");
     RETURN_IF_ERROR(err);
 
     return data_writer_error >= 0 ? NSAPI_ERROR_OK : data_writer_error;
@@ -789,8 +762,9 @@ nsapi_error_t SIM5320FTPClient::upload(int local_file, const char *remote_path)
     return put(remote_path, callback(&upload_callback, &file_upload_callback_t::fetch));
 }
 
-#define FTP_GET_DATA_WAIT_TIMEOUT 3000
+static constexpr milliseconds_u32 FTP_GET_DATA_WAIT_TIMEOUT = 3s;
 #define FTP_GET_DATA_MAX_WAIT_DATA_ATTEMPTS 10
+
 nsapi_error_t SIM5320FTPClient::_get_data_impl(const char *path, Callback<ssize_t(uint8_t *, size_t)> data_reader, const char *command)
 {
     ssize_t callback_res = 0;
@@ -828,8 +802,7 @@ nsapi_error_t SIM5320FTPClient::_get_data_impl(const char *path, Callback<ssize_
     // read data from cache
     int wait_data_attempt_count = 0;
     while (!_at.get_last_error()) {
-        _at.cmd_start("AT+CFTPSCACHERD");
-        _at.cmd_stop();
+        _at.cmd_start_stop("+CFTPSCACHERD", "");
         // there 3 possible responses
         // 1. cache is empty:
         //      "OK"

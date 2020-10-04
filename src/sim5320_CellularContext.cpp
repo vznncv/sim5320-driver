@@ -1,7 +1,13 @@
 #include "sim5320_CellularContext.h"
 #include "sim5320_CellularStack.h"
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
+
+using mbed::chrono::milliseconds_u32;
 using namespace sim5320;
+
+#define to_ms_u32(value) std::chrono::duration_cast<milliseconds_u32>(value)
 
 SIM5320CellularContext::SIM5320CellularContext(ATHandler &at, SIM5320CellularDevice *device, const char *apn, bool cp_req, bool nonip_req)
     : AT_CellularContext(at, device, apn, cp_req, nonip_req)
@@ -14,18 +20,14 @@ SIM5320CellularContext::SIM5320CellularContext(ATHandler &at, SIM5320CellularDev
 
 SIM5320CellularContext::~SIM5320CellularContext()
 {
-    if (_stack) {
-        delete _stack;
-    }
-
     _at.set_urc_handler("+NETOPEN:", NULL);
     _at.set_urc_handler("+NETCLOSE:", NULL);
 }
 
-static const int PDP_CONTEXT_ID = 1;
-static const int PDP_CONTEXT_ACTIVATION_TIMEOUT = 32000;
-static const int PDP_CONTEXT_DEACTIVATION_TIMEOUT = 16000;
-static const int PDP_STATUS_CHECK_DELAY = 1000;
+static constexpr int PDP_CONTEXT_ID = 1;
+static constexpr milliseconds_u32 PDP_CONTEXT_ACTIVATION_TIMEOUT = 32s;
+static constexpr milliseconds_u32 PDP_CONTEXT_DEACTIVATION_TIMEOUT = 16s;
+static constexpr milliseconds_u32 PDP_STATUS_CHECK_DELAY = 1s;
 
 void SIM5320CellularContext::do_connect()
 {
@@ -96,7 +98,7 @@ void SIM5320CellularContext::do_connect()
 
     // wait network
     timer.start();
-    while (!_is_net_opened && timer.read_ms() < PDP_CONTEXT_ACTIVATION_TIMEOUT) {
+    while (!_is_net_opened && timer.elapsed_time() < PDP_CONTEXT_ACTIVATION_TIMEOUT) {
         ThisThread::sleep_for(PDP_STATUS_CHECK_DELAY);
         _check_netstate();
     }
@@ -123,8 +125,8 @@ uint32_t SIM5320CellularContext::get_timeout_for_operation(CellularContext::Cont
     return timeout;
 }
 
-#define CLOSE_NETWORK_ERR_TIMEOUT 500
-#define CLOSE_NETWORK_MAX_ATTEMPTS 20
+static constexpr milliseconds_u32 CLOSE_NETWORK_ERR_TIMEOUT = 500ms;
+static constexpr int CLOSE_NETWORK_MAX_ATTEMPTS = 20;
 
 nsapi_error_t SIM5320CellularContext::disconnect()
 {

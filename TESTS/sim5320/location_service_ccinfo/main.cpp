@@ -5,14 +5,17 @@
  * - active SIM card
  * - an aviable network.
  */
-#include "greentea-client/test_env.h"
+#include <string.h>
+#include <time.h>
+
 #include "mbed.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
+
+#include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
-#include <time.h>
+
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
 
 using namespace utest::v1;
 using namespace sim5320;
@@ -31,7 +34,7 @@ static utest::v1::status_t lib_test_setup_handler(const size_t number_of_cases)
 static utest::v1::status_t lib_case_setup_handler(const Case *const source, const size_t index_of_case)
 {
     int err = modem->reset();
-    ThisThread::sleep_for(1000);
+    ThisThread::sleep_for(1000ms);
     return unite_utest_status_with_err(greentea_case_setup_handler(source, index_of_case), err);
 }
 
@@ -89,7 +92,7 @@ void test_ccinfo_device_up()
     err = modem->request_to_start();
     TEST_ASSERT_EQUAL(0, err);
 
-    ThisThread::sleep_for(10000);
+    ThisThread::sleep_for(10000ms);
     SIM5320LocationService *location_service = modem->get_location_service();
 
     err = location_service->cell_system_read_info(&station_info, has_data);
@@ -140,13 +143,13 @@ void test_ccinfo_device_network_up()
 
 // test cases description
 #define SIM5320Case(test_fun) Case(#test_fun, lib_case_setup_handler, test_fun, lib_case_teardown_handler, greentea_case_failure_continue_handler)
-Case cases[] = {
+static Case cases[] = {
     SIM5320Case(test_ccinfo_device_after_start),
     SIM5320Case(test_ccinfo_after_device_up),
     SIM5320Case(test_ccinfo_device_up),
     SIM5320Case(test_ccinfo_device_network_up),
 };
-Specification specification(lib_test_setup_handler, cases, lib_test_teardown_handler);
+static Specification specification(lib_test_setup_handler, cases, lib_test_teardown_handler);
 
 // Entry point into the tests
 int main()

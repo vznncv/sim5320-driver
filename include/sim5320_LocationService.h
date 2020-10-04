@@ -1,11 +1,18 @@
 #ifndef SIM5320_LOCATIONSERVICE_H
 #define SIM5320_LOCATIONSERVICE_H
 
-#include "ATHandler.h"
-#include "AT_CellularDevice.h"
 #include "mbed.h"
+#include "mbed_chrono.h"
+
+#include "ATHandler.h"
 
 namespace sim5320 {
+
+#ifdef DEVICE_LPTICKER
+using TargetTimer = LowPowerTimer;
+#else
+using TargetTimer = Timer;
+#endif
 
 /**
  * Location API of the SIM5320.
@@ -15,11 +22,24 @@ namespace sim5320 {
 class SIM5320LocationService : private NonCopyable<SIM5320LocationService> {
 
 protected:
+    // helper timer to measure time since gps startup
+    TargetTimer _up_timer;
+
     ATHandler &_at;
-    AT_CellularDevice &_device;
+
+private:
+    /**
+     * CGPSFTM URC code processing (see AT+CGPSFTM).
+     *
+     * It's used to check if any satellites are detected.
+     */
+    void _cgpsftm_urc();
+
+    mbed::chrono::milliseconds_u32 _last_cgpsftm_urc_timestamp;
+    int _last_cgpsftm_urc_sats;
 
 public:
-    SIM5320LocationService(ATHandler &at, AT_CellularDevice &device);
+    SIM5320LocationService(ATHandler &at);
     virtual ~SIM5320LocationService();
 
     /**
@@ -100,30 +120,22 @@ private:
     // GPS receivers timeout constants
     //****
     // receiver requires some time for starting/stopping
-    static constexpr int _GPS_START_TIMEOUT_MS = 8000;
-    static constexpr int _GPS_STOP_TIMEOUT_MS = 32000;
-    static constexpr int _GPS_SS_CHECK_PERIOD_MS = 1000;
-    // gps cold startup note:
-    // 1) open sky, good signal: < 35 sec
-    // 2) open sky, weak signal: ~ 100 sec
-    static constexpr int _GPS_COLD_TTF_TIMEOUT_MS = 120000;
-    static constexpr int _GPS_HOT_TIMEOU_DELAY_MS = 10000;
-    static constexpr int _GPS_EPHIMERIS_DATA_UPDATE_TIME_MS = 32000;
-    static constexpr int _GPS_CHECK_PERIOD_MS = 2000;
-    static constexpr int _GPS_RETRY_PERIOD_MS = 32000;
+    static constexpr mbed::chrono::milliseconds_u32 _GPS_START_TIMEOUT = 8s;
+    static constexpr mbed::chrono::milliseconds_u32 _GPS_STOP_TIMEOUT = 32s;
+    static constexpr mbed::chrono::milliseconds_u32 _GPS_SS_CHECK_PERIOD = 1s;
 
     //
     // After AT+CGPS command GPS may require 1-3 seconds to be started/stopped.
     // So we need some extra logic to process it.
     //
-    nsapi_error_t _wait_gps_start_stop(bool state, int timeout_ms, int check_period_ms);
-    nsapi_error_t _wait_gps_start(int timeout_ms = _GPS_START_TIMEOUT_MS, int check_period_ms = _GPS_SS_CHECK_PERIOD_MS)
+    nsapi_error_t _wait_gps_start_stop(bool state, mbed::chrono::milliseconds_u32 timeout, mbed::chrono::milliseconds_u32 check_period);
+    nsapi_error_t _wait_gps_start(mbed::chrono::milliseconds_u32 timeout = _GPS_START_TIMEOUT, mbed::chrono::milliseconds_u32 check_period = _GPS_SS_CHECK_PERIOD)
     {
-        return _wait_gps_start_stop(true, timeout_ms, check_period_ms);
+        return _wait_gps_start_stop(true, timeout, check_period);
     }
-    nsapi_error_t _wait_gps_stop(int timeout_ms = _GPS_STOP_TIMEOUT_MS, int check_period_ms = _GPS_SS_CHECK_PERIOD_MS)
+    nsapi_error_t _wait_gps_stop(mbed::chrono::milliseconds_u32 timeout = _GPS_STOP_TIMEOUT, mbed::chrono::milliseconds_u32 check_period = _GPS_SS_CHECK_PERIOD)
     {
-        return _wait_gps_start_stop(false, timeout_ms, check_period_ms);
+        return _wait_gps_start_stop(false, timeout, check_period);
     }
 
 public:
@@ -151,7 +163,7 @@ public:
     nsapi_error_t gps_read_coord(coord_t *coord, bool &ff_flag);
 
 private:
-    int _gps_stop_internal(int &op_duration_ms);
+    int _gps_stop_internal(mbed::chrono::milliseconds_u32 &op_duration);
 
 public:
     /**
@@ -161,10 +173,11 @@ public:
      */
     nsapi_error_t gps_stop();
 
+private:
     /**
      * Run GPS with current settings, try to get coordinates and stop.
      */
-    nsapi_error_t _gps_locate_base_impl(coord_t *coord, bool &ff_flag, GPSMode mode, GPSStartupMode startup_mode, int timeout_ms, int check_period_ms);
+    nsapi_error_t _gps_locate_base_impl(coord_t *coord, bool &ff_flag, GPSMode mode, GPSStartupMode startup_mode, Callback<mbed::chrono::milliseconds_u32(int)> timeout_cb, mbed::chrono::milliseconds_u32 poll_period);
 
 public:
     /**

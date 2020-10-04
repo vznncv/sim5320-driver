@@ -24,18 +24,26 @@ using namespace sim5320;
 #define MODEM_SIM_PIN ""
 #define APP_LED LED2
 
+/**
+ * Helper functions
+ */
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                           \
-    {                                                                                  \
-        int err = expr;                                                                \
-        if (err < 0) {                                                                 \
-            char err_msg[64];                                                          \
-            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
-        }                                                                              \
+static int _check_ret_code(int res, const char *expr)
+{
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
-;
-DigitalOut led(APP_LED);
+    return res;
+}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
+
+/**
+ * Main code
+ */
+
+static DigitalOut led(APP_LED);
 
 int main()
 {
@@ -54,7 +62,7 @@ int main()
     int count = 0;
     SIM5320LocationService *location_service = sim5320.get_location_service();
 
-    while (1) {
+    while (true) {
         CHECK_RET_CODE(location_service->cell_system_read_info(&station_info, has_res));
 
         printf("%4i. ", count);
@@ -67,7 +75,7 @@ int main()
         }
         printf("\n");
 
-        ThisThread::sleep_for(10000);
+        ThisThread::sleep_for(10000ms);
         count++;
         led = !led;
     }

@@ -1,25 +1,54 @@
 #include "sim5320_LocationService.h"
+
+#include <chrono>
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
 
-#include "mbed_trace.h"
-#define TRACE_GROUP "smlc"
-
-#ifdef DEVICE_LPTICKER
-#define TargetTimer LowPowerTimer
-#else
-#define TargetTimer Timer
-#endif
-
+using mbed::chrono::milliseconds_u32;
 using namespace sim5320;
 
-SIM5320LocationService::SIM5320LocationService(ATHandler &at, AT_CellularDevice &device)
-    : _at(at)
-    , _device(device)
+#define to_ms_u32(value) std::chrono::duration_cast<milliseconds_u32>(value)
+
+void SIM5320LocationService::_cgpsftm_urc()
 {
+    const size_t data_buf_size = 8;
+    char data_buf[data_buf_size];
+    ssize_t res;
+    int total_sat = 0;
+
+    _last_cgpsftm_urc_timestamp = to_ms_u32(_up_timer.elapsed_time());
+
+    // skip first comma after "$GPGSV"
+    _at.skip_param();
+
+    while (true) {
+        // read satellite in view (SV) code
+        res = _at.read_string(data_buf, data_buf_size);
+        if (res < 0) {
+            break;
+        }
+        // read satellite sinal power
+        res = _at.read_string(data_buf, data_buf_size);
+        if (res < 0) {
+            break;
+        }
+        // satellite is found
+        total_sat++;
+    }
+
+    _last_cgpsftm_urc_sats = total_sat;
+}
+
+SIM5320LocationService::SIM5320LocationService(ATHandler &at)
+    : _at(at)
+{
+    _at.set_urc_handler("$GPGSV", callback(this, &SIM5320LocationService::_cgpsftm_urc));
 }
 
 SIM5320LocationService::~SIM5320LocationService()
 {
+    _at.set_urc_handler("$GPGSV", nullptr);
 }
 
 nsapi_error_t SIM5320LocationService::init()
@@ -34,18 +63,26 @@ nsapi_error_t SIM5320LocationService::init()
     return _at.get_last_error();
 }
 
-nsapi_error_t SIM5320LocationService::_wait_gps_start_stop(bool state, int timeout_ms, int check_period_ms)
+//****
+// GPS receivers timeout constants declaration (it isn't necessary since C++17)
+//****
+constexpr milliseconds_u32 SIM5320LocationService::_GPS_START_TIMEOUT;
+constexpr milliseconds_u32 SIM5320LocationService::_GPS_STOP_TIMEOUT;
+constexpr milliseconds_u32 SIM5320LocationService::_GPS_SS_CHECK_PERIOD;
+
+nsapi_error_t SIM5320LocationService::_wait_gps_start_stop(bool state, milliseconds_u32 timeout, milliseconds_u32 check_period)
 {
-    TargetTimer tm;
-    int elapsed_time;
-    ATHandlerLocker locker(_at, timeout_ms + 1000);
-    tm.start();
+    milliseconds_u32 start_time = to_ms_u32(_up_timer.elapsed_time());
+    milliseconds_u32 elapsed_time;
+    ATHandlerLocker locker(_at, timeout + 1000ms);
 
     bool active = !state;
     int err;
 
+    _up_timer.elapsed_time();
+
     while (true) {
-        elapsed_time = tm.read_ms();
+        elapsed_time = to_ms_u32(_up_timer.elapsed_time()) - start_time;
         err = gps_is_active(active);
         if (err) {
             return err;
@@ -53,10 +90,10 @@ nsapi_error_t SIM5320LocationService::_wait_gps_start_stop(bool state, int timeo
         if (state == active) {
             break;
         }
-        if (elapsed_time > timeout_ms) {
+        if (elapsed_time > timeout) {
             break;
         }
-        ThisThread::sleep_for(check_period_ms);
+        ThisThread::sleep_for(check_period);
     }
     if (state != active) {
         return MBED_ERROR_CODE_TIME_OUT;
@@ -89,6 +126,10 @@ nsapi_error_t SIM5320LocationService::gps_start(SIM5320LocationService::GPSMode 
     if (err) {
         return err;
     }
+
+    // run gps timer
+    _up_timer.reset();
+    _up_timer.start();
 
     return _wait_gps_start();
 }
@@ -162,10 +203,18 @@ nsapi_error_t SIM5320LocationService::gps_read_coord(SIM5320LocationService::coo
         float alt = strtof(alt_str, NULL);
         // parse date
         tm gps_tm;
-        sscanf(date_str, "%2d%2d%2d", &gps_tm.tm_mday, &gps_tm.tm_mon, &gps_tm.tm_year);
+        SimpleStringParser date_parser(date_str);
+        date_parser.consume_int(&gps_tm.tm_mday, 2);
+        date_parser.consume_int(&gps_tm.tm_mon, 2);
+        date_parser.consume_int(&gps_tm.tm_year, 2);
         int sub_sec;
-        sscanf(utc_time_str, "%2d%2d%2d.%d", &gps_tm.tm_hour, &gps_tm.tm_min, &gps_tm.tm_sec, &sub_sec);
-        gps_tm.tm_year += 100;
+        SimpleStringParser time_parser(utc_time_str);
+        time_parser.consume_int(&gps_tm.tm_hour, 2);
+        time_parser.consume_int(&gps_tm.tm_min, 2);
+        time_parser.consume_int(&gps_tm.tm_sec, 2);
+        time_parser.consume_literal(".");
+        time_parser.consume_int(&sub_sec);
+        gps_tm.tm_year += 100; // tm_year since 1900
         gps_tm.tm_mon -= 1;
         // fill result
         coord->latitude = lat;
@@ -180,46 +229,55 @@ nsapi_error_t SIM5320LocationService::gps_read_coord(SIM5320LocationService::coo
     return _at.get_last_error();
 }
 
-int SIM5320LocationService::_gps_stop_internal(int &op_duration_ms)
+int SIM5320LocationService::_gps_stop_internal(milliseconds_u32 &op_duration)
 {
     ATHandlerLocker locker(_at);
-    TargetTimer t;
     int err;
-
-    t.start();
+    milliseconds_u32 op_start = to_ms_u32(_up_timer.elapsed_time());
 
     if ((err = at_cmdw_set_i(_at, "+CGPS", 0, false))) {
         return err;
     }
     err = _wait_gps_stop();
 
-    t.stop();
-    op_duration_ms = t.read_ms();
+    op_duration = to_ms_u32(_up_timer.elapsed_time()) - op_start;
+
+    if (!err) {
+        _up_timer.stop();
+    }
+
     return err;
 }
 
 nsapi_error_t SIM5320LocationService::gps_stop()
 {
-    int op_duration_ms;
-    return _gps_stop_internal(op_duration_ms);
+    milliseconds_u32 op_duration;
+    return _gps_stop_internal(op_duration);
 }
 
-nsapi_error_t SIM5320LocationService::_gps_locate_base_impl(SIM5320LocationService::coord_t *coord, bool &ff_flag, SIM5320LocationService::GPSMode mode, SIM5320LocationService::GPSStartupMode startup_mode, int timeout_ms, int check_period_ms)
+nsapi_error_t SIM5320LocationService::_gps_locate_base_impl(SIM5320LocationService::coord_t *coord, bool &ff_flag, SIM5320LocationService::GPSMode mode, SIM5320LocationService::GPSStartupMode startup_mode, Callback<milliseconds_u32(int)> timeout_cb, milliseconds_u32 poll_period)
 {
     int err = 0;
-    int op_duration_ms;
-    TargetTimer tm;
-    int elapsed_time;
+    milliseconds_u32 op_duration;
+    milliseconds_u32 elapsed_time;
+    milliseconds_u32 poll_elapsated;
+    milliseconds_u32 op_start;
 
     ATHandlerLocker lock(_at);
     ff_flag = false;
 
     // run GPS, ignore current settings
     gps_start(mode, startup_mode);
+
+    op_start = to_ms_u32(_up_timer.elapsed_time());
+    // enable CGPSFTM URC codes
+    _last_cgpsftm_urc_sats = 0;
+    _last_cgpsftm_urc_timestamp = op_start;
+    _at.at_cmd_discard("+CGPSFTM", "=", "%d", 1);
+
     // wait first fix
-    tm.start();
     while (true) {
-        elapsed_time = tm.read_ms();
+        elapsed_time = to_ms_u32(_up_timer.elapsed_time()) - op_start;
         err = gps_read_coord(coord, ff_flag);
         if (err) {
             break;
@@ -227,35 +285,61 @@ nsapi_error_t SIM5320LocationService::_gps_locate_base_impl(SIM5320LocationServi
         if (ff_flag) {
             break;
         }
-        if (elapsed_time > timeout_ms) {
+        if (elapsed_time > timeout_cb(_last_cgpsftm_urc_sats)) {
             break;
         }
-        ThisThread::sleep_for(check_period_ms);
+        // ensure that we process URC code every second
+        poll_elapsated = poll_period;
+        while (poll_elapsated > 1s) {
+            ThisThread::sleep_for(1s);
+            _at.process_oob();
+            poll_elapsated -= 1s;
+        }
+        ThisThread::sleep_for(poll_elapsated);
     }
-    tm.stop();
+
+    // disable CGPSFTM URC codes
+    _at.at_cmd_discard("+CGPSFTM", "=", "%d", 0);
     // stop GPS
-    _gps_stop_internal(op_duration_ms);
+    _gps_stop_internal(op_duration);
 
     if (ff_flag) {
         // add stop operation compensation
-        coord->time += op_duration_ms / 1000;
+        coord->time += op_duration.count() / 1000;
+    } else {
+        tr_debug("Cannot resolve coordinates with %i satellites in view", _last_cgpsftm_urc_sats);
     }
 
     return err;
+}
+
+// gps cold startup note:
+// 1) open sky, good signal: < 35 sec
+// 2) open sky, weak signal: ~ 100 sec
+static constexpr milliseconds_u32 _GPS_POLL_PERIOD = 2s;
+static constexpr milliseconds_u32 _GPS_RETRY_PERIOD = 32s;
+// note: if at least one satellite is found, wait more
+static milliseconds_u32 calc_ttf_timeout(int total_sat_in_view)
+{
+    if (total_sat_in_view <= 0) {
+        return 32s;
+    } else if (total_sat_in_view <= 2) {
+        return 128s;
+    } else {
+        return 640s;
+    }
 }
 
 nsapi_error_t SIM5320LocationService::gps_locate(SIM5320LocationService::coord_t *coord, bool &ff_flag, SIM5320LocationService::GPSMode mode)
 {
     int err = 0;
     bool xtra_usage_flag;
-    bool res_flag = false;
-    int op_duration_ms;
     ATHandlerLocker at(_at);
 
     ff_flag = false;
 
     // First attempt. Try to use existed GPS settings.
-    err = _gps_locate_base_impl(coord, ff_flag, mode, GPS_STARTUP_MODE_AUTO, _GPS_COLD_TTF_TIMEOUT_MS, _GPS_CHECK_PERIOD_MS);
+    err = _gps_locate_base_impl(coord, ff_flag, mode, GPS_STARTUP_MODE_AUTO, callback(calc_ttf_timeout), _GPS_POLL_PERIOD);
     if (!err && ff_flag) {
         return 0;
     }
@@ -270,10 +354,10 @@ nsapi_error_t SIM5320LocationService::gps_locate(SIM5320LocationService::coord_t
         gps_xtra_set(false);
     }
     // delay before second attempt
-    ThisThread::sleep_for(_GPS_RETRY_PERIOD_MS);
+    ThisThread::sleep_for(_GPS_RETRY_PERIOD);
 
     // try to get gps coordinates again
-    err = _gps_locate_base_impl(coord, ff_flag, GPS_MODE_STANDALONE, GPS_STARTUP_MODE_COLD, _GPS_COLD_TTF_TIMEOUT_MS, _GPS_CHECK_PERIOD_MS);
+    err = _gps_locate_base_impl(coord, ff_flag, GPS_MODE_STANDALONE, GPS_STARTUP_MODE_COLD, callback(calc_ttf_timeout), _GPS_POLL_PERIOD);
     if (xtra_usage_flag) {
         // restore xtra function
         gps_xtra_set(true);

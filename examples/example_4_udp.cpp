@@ -29,17 +29,40 @@ using namespace sim5320;
 #define MODEM_SIM_APN_PASSWORD "mts"
 
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                           \
-    {                                                                                  \
-        int err = expr;                                                                \
-        if (err < 0) {                                                                 \
-            char err_msg[64];                                                          \
-            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
-        }                                                                              \
+static int _check_ret_code(int res, const char *expr)
+{
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
+    return res;
+}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
 
-DigitalOut led(LED2);
+#define SEPARATOR_WIDTH 80
+
+void print_separator(const char fill_sep = '=', const int width = SEPARATOR_WIDTH, const char end = '\n')
+{
+    for (int i = 0; i < width; i++) {
+        putchar(fill_sep);
+    }
+    if (end) {
+        putchar(end);
+    }
+}
+
+void print_header(const char *header, const char left_sep = '-', const char right_sep = '-', const int width = SEPARATOR_WIDTH)
+{
+    int sep_n = SEPARATOR_WIDTH - strlen(header) - 2;
+    sep_n = sep_n < 0 ? 0 : sep_n;
+    int sep_l_n = sep_n / 2;
+    int sep_r_n = sep_n - sep_l_n;
+
+    print_separator(left_sep, sep_l_n, '\0');
+    printf(" %s ", header);
+    print_separator(right_sep, sep_r_n);
+}
 
 static const char *get_reg_status_name(CellularNetwork::RegistrationStatus status)
 {
@@ -107,29 +130,9 @@ static const char *get_radio_access_technology_name(CellularNetwork::RadioAccess
     }
 }
 
-#define SEPARATOR_WIDTH 80
-
-void print_separator(const char fill_sep = '=', const int width = SEPARATOR_WIDTH, const char end = '\n')
-{
-    for (int i = 0; i < width; i++) {
-        putchar(fill_sep);
-    }
-    if (end) {
-        putchar(end);
-    }
-}
-
-void print_header(const char *header, const char left_sep = '-', const char right_sep = '-', const int width = SEPARATOR_WIDTH)
-{
-    int sep_n = SEPARATOR_WIDTH - strlen(header) - 2;
-    sep_n = sep_n < 0 ? 0 : sep_n;
-    int sep_l_n = sep_n / 2;
-    int sep_r_n = sep_n - sep_l_n;
-
-    print_separator(left_sep, sep_l_n, '\0');
-    printf(" %s ", header);
-    print_separator(right_sep, sep_r_n);
-}
+/**
+ * Main code
+ */
 
 /**
  * Get current time from NTP server.
@@ -177,6 +180,8 @@ time_t get_current_time(NetworkInterface *iface, const char *ntp_server_address,
 
     return (time_t)seconds_since_1900 - TIME1970;
 }
+
+static DigitalOut led(LED2);
 
 int main()
 {
@@ -226,8 +231,8 @@ int main()
     CHECK_RET_CODE(sim5320.request_to_stop());
     printf("Complete!\n");
 
-    while (1) {
-        ThisThread::sleep_for(500);
+    while (true) {
+        ThisThread::sleep_for(500ms);
         led = !led;
     }
 }

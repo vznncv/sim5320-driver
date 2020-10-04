@@ -15,22 +15,24 @@ using namespace sim5320;
 /**
  * Settings.
  */
-// Modem settings.
 #define MODEM_TX_PIN PD_8
 #define MODEM_RX_PIN PD_9
-// Led indicator
 #define APP_LED LED2
 
+/**
+ * Helper functions
+ */
 #define APP_ERROR(err, message) MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), message)
-#define CHECK_RET_CODE(expr)                                                           \
-    {                                                                                  \
-        int err = expr;                                                                \
-        if (err < 0) {                                                                 \
-            char err_msg[64];                                                          \
-            sprintf(err_msg, "Expression \"" #expr "\" failed (error code: %i)", err); \
-            MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, err), err_msg);        \
-        }                                                                              \
+static int _check_ret_code(int res, const char *expr)
+{
+    static char err_msg[128];
+    if (res < 0) {
+        snprintf(err_msg, 128, "Expression \"%s\" failed (error code: %i)", expr, res);
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_APPLICATION, res), err_msg);
     }
+    return res;
+}
+#define CHECK_RET_CODE(expr) _check_ret_code(expr, #expr)
 
 void print_time(time_t *time)
 {
@@ -52,12 +54,22 @@ void print_coord(SIM5320LocationService::coord_t *coord)
     printf("\n");
 }
 
+template <class T>
+int second_count(T d)
+{
+    return (std::chrono::duration_cast<std::chrono::seconds>(d)).count();
+}
+
+/**
+ * Main code
+ */
+
+static DigitalOut led(APP_LED);
+
 int main()
 {
-    // led and button
-    DigitalOut led(APP_LED);
     Timer tm;
-    int t;
+    std::chrono::microseconds t;
     SIM5320LocationService::coord_t coord;
     bool has_coord;
 
@@ -74,18 +86,18 @@ int main()
 
     // reset GPS settings
     CHECK_RET_CODE(location_service->gps_xtra_set(false));
-    CHECK_RET_CODE(location_service->gps_set_accuracy(20));
+    CHECK_RET_CODE(location_service->gps_set_accuracy(100));
 
     // get GPS coordinates
     printf("Measure GPS coordinates ...\n");
     tm.start();
     CHECK_RET_CODE(location_service->gps_locate(&coord, has_coord));
-    t = tm.read_ms() / 1000;
+    t = tm.elapsed_time();
     if (has_coord) {
-        printf("Coordinates has been resolved witing %i seconds\n", t);
+        printf("Coordinates has been resolved witing %i seconds\n", second_count(t));
         print_coord(&coord);
     } else {
-        printf("Coordinates hasn't beed resolved within %i seconds\n", t);
+        printf("Coordinates hasn't beed resolved within %i seconds\n", second_count(t));
     }
 
     printf("Stop ...\n");
@@ -93,7 +105,7 @@ int main()
     printf("Complete!\n");
 
     while (true) {
-        ThisThread::sleep_for(500);
+        ThisThread::sleep_for(500ms);
         led = !led;
     }
 }

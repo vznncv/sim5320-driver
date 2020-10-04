@@ -2,11 +2,12 @@
 #define SIM5320_DRIVER_H
 
 #include "mbed.h"
+#include "mbed_chrono.h"
+
 #include "sim5320_CellularDevice.h"
 #include "sim5320_FTPClient.h"
 #include "sim5320_LocationService.h"
 #include "sim5320_TimeService.h"
-#include "sim5320_utils.h"
 
 namespace sim5320 {
 
@@ -237,7 +238,7 @@ private:
     int _network_up_request_count;
     ATHandler *_at;
 
-    static const int _STARTUP_TIMEOUT_MS = 32000;
+    static constexpr mbed::chrono::milliseconds_u32 _STARTUP_TIMEOUT = 48s;
     nsapi_error_t _reset_soft();
     nsapi_error_t _reset_hard();
     nsapi_error_t _skip_initialization_messages();

@@ -1,5 +1,5 @@
 /**
- * FTP client test case.
+ * Location service test case.
  *
  * Test requirements:
  *
@@ -7,28 +7,29 @@
  * - an aviable network
  * - gps satellites should be available for an antenna
  */
+#include <chrono>
+#include <math.h>
+#include <string.h>
+
+#include "mbed.h"
+#include "mbed_chrono.h"
 
 #include "greentea-client/test_env.h"
-#include "math.h"
-#include "mbed.h"
-#include "mbed_trace.h"
-
-#include "rtos.h"
-#include "sim5320_driver.h"
-#include "sim5320_tests_utils.h"
-#include "string.h"
 #include "unity.h"
 #include "utest.h"
 
-#define TRACE_GROUP "tgps"
+#include "sim5320_driver.h"
+#include "sim5320_tests_utils.h"
+#include "sim5320_utils.h"
 
+using mbed::chrono::milliseconds_u32;
 using namespace utest::v1;
 using namespace sim5320;
 
 static sim5320::SIM5320 *modem;
 static sim5320::SIM5320LocationService *location_service;
 
-#define GPS_RETRY_INTERVAL_MS 30000
+static constexpr milliseconds_u32 GPS_RETRY_INTERVAL_MS = 30s;
 
 static utest::v1::status_t app_case_setup_handler(const Case *const source, const size_t index_of_case)
 {
@@ -109,16 +110,16 @@ static int coord_verify(SIM5320LocationService::coord_t &coord, int line_no)
 
 #define COORD_VERIFY(coord) coord_verify(coord, __LINE__)
 
-static int gps_wait_and_read_coord(SIM5320LocationService *location_service, SIM5320LocationService::coord_t *coord, int timeout_ms, int polling_interval_ms = 1000)
+static int gps_wait_and_read_coord(SIM5320LocationService *location_service, SIM5320LocationService::coord_t *coord, milliseconds_u32 timeout, milliseconds_u32 polling_interval = 1s)
 {
     Timer tm;
     bool has_coord;
     int err;
-    int total_timeout_ms = timeout_ms + polling_interval_ms;
+    milliseconds_u32 total_timeout = timeout + polling_interval;
 
     tm.start();
     do {
-        ThisThread::sleep_for(polling_interval_ms);
+        ThisThread::sleep_for(polling_interval);
         COORD_CLEAR(*coord);
         has_coord = false;
         err = location_service->gps_read_coord(coord, has_coord);
@@ -129,11 +130,11 @@ static int gps_wait_and_read_coord(SIM5320LocationService *location_service, SIM
         if (has_coord) {
             break;
         }
-    } while (tm.read_ms() <= total_timeout_ms);
+    } while (tm.elapsed_time() <= total_timeout);
 
     if (!has_coord) {
         char buf[80];
-        sprintf(buf, "Fail to get coordinates within %i milliseconds", timeout_ms);
+        sprintf(buf, "Fail to get coordinates within %i milliseconds", timeout.count());
         TEST_FAIL_MESSAGE(buf);
         return -1;
     }
@@ -207,7 +208,7 @@ void test_gps_standalone_cold_hot()
     // cold startup
     err = location_service->gps_start(SIM5320LocationService::GPS_MODE_STANDALONE, SIM5320LocationService::GPS_STARTUP_MODE_COLD);
     TEST_ASSERT_EQUAL(0, err);
-    err = gps_wait_and_read_coord(location_service, &coord, 120'000);
+    err = gps_wait_and_read_coord(location_service, &coord, 120s);
     TEST_ASSERT_EQUAL(0, err);
     COORD_VERIFY(coord);
     err = location_service->gps_stop();
@@ -218,7 +219,7 @@ void test_gps_standalone_cold_hot()
     // hot startup
     err = location_service->gps_start(SIM5320LocationService::GPS_MODE_STANDALONE, SIM5320LocationService::GPS_STARTUP_MODE_HOT);
     TEST_ASSERT_EQUAL(0, err);
-    err = gps_wait_and_read_coord(location_service, &coord, 20'000);
+    err = gps_wait_and_read_coord(location_service, &coord, 20s);
     TEST_ASSERT_EQUAL(0, err);
     COORD_VERIFY(coord);
     err = location_service->gps_stop();
@@ -243,7 +244,7 @@ void test_gps_xtra()
     // run gps
     err = location_service->gps_start();
     TEST_ASSERT_EQUAL(0, err);
-    err = gps_wait_and_read_coord(location_service, &coord, 100'000);
+    err = gps_wait_and_read_coord(location_service, &coord, 100s);
     TEST_ASSERT_EQUAL(0, err);
     COORD_VERIFY(coord);
     err = location_service->gps_stop();
@@ -256,7 +257,6 @@ void test_gps_xtra()
 
 void test_apgs()
 {
-
     SIM5320LocationService::coord_t coord;
     int err;
 
@@ -269,7 +269,7 @@ void test_apgs()
     // agps mode
     err = location_service->gps_start(SIM5320LocationService::GPS_MODE_UE_BASED);
     TEST_ASSERT_EQUAL(0, err);
-    err = gps_wait_and_read_coord(location_service, &coord, 80'000);
+    err = gps_wait_and_read_coord(location_service, &coord, 80s);
     TEST_ASSERT_EQUAL(0, err);
     COORD_VERIFY(coord);
     err = location_service->gps_stop();

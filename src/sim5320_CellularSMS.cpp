@@ -1,23 +1,86 @@
 #if MBED_CONF_CELLULAR_USE_SMS
 
+#include "mbed_chrono.h"
+
 #include "sim5320_CellularSMS.h"
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
+
+using mbed::chrono::milliseconds_u32;
 using namespace sim5320;
 
 #define CTRL_Z "\x1a"
 #define ESC "\x1b"
 
-SIM5320CellularSMS::SIM5320CellularSMS(ATHandler &at_handler, AT_CellularDevice &device)
-    : AT_CellularSMS(at_handler, device)
-    , _at(at_handler)
+void SIM5320CellularSMS::_cmti_urc()
 {
+    tr_debug("CMTI_URC called");
+    //+CMTI: <mem>,<index>,
+    // call user defined callback function
+    if (_cb) {
+        _cb();
+    }
+}
+
+void SIM5320CellularSMS::_cmt_urc()
+{
+    tr_debug("CMT_URC called");
+    //+CMT: <oa>,[<alpha>],<scts>[,<tooa>,<fo>,<pid>,<dcs>,<sca>,<tosca>,<length>]<CR><LF><data>
+    (void)_at.consume_to_stop_tag();
+    // call user defined callback function
+    if (_cb) {
+        _cb();
+    }
+}
+
+nsapi_error_t SIM5320CellularSMS::get_sms_message_mode(CellularSMS::CellularSMSMmode &mode)
+{
+    int mode_code = 0;
+    int err = _at.at_cmd_int("+CMGF", "?", mode_code);
+    mode = mode_code == 1 ? CellularSMSMmodeText : CellularSMSMmodePDU;
+    return err;
+}
+
+SIM5320CellularSMS::SIM5320CellularSMS(ATHandler &at_handler)
+    : _at(at_handler)
+{
+    // configure SMS callbacks
+    _at.set_urc_handler("+CMTI:", callback(this, &SIM5320CellularSMS::_cmti_urc));
+    _at.set_urc_handler("+CMT:", callback(this, &SIM5320CellularSMS::_cmt_urc));
 }
 
 SIM5320CellularSMS::~SIM5320CellularSMS()
 {
+    // clear AT callbacks
+    _at.set_urc_handler("+CMTI:", nullptr);
+    _at.set_urc_handler("+CMT:", nullptr);
 }
 
-#define SMS_CONFIRMATION_TIMEOUT 12000
+static const uint8_t FIRST_OCTET_DELIVER_SUBMIT = 17;
+static const uint8_t TP_VALIDITY_PERIOD_24_HOURS = 167;
+static const uint8_t TP_PROTOCOL_IDENTIFIER = 0;
+static const uint8_t SMS_DATA_CODING_SCHEME = 0;
+
+nsapi_error_t SIM5320CellularSMS::initialize(CellularSMS::CellularSMSMmode mode, CellularSMS::CellularSMSEncoding encoding)
+{
+    if (mode != CellularSMSMmodeText) {
+        return NSAPI_ERROR_UNSUPPORTED;
+    }
+
+    _use_8bit_encoding = (encoding == CellularSMSEncoding8Bit);
+
+    ATHandlerLocker locker(_at);
+    // sms configuration
+    _at.at_cmd_discard("+CNMI", "=2,1");
+    _at.at_cmd_discard("+CMGF", "=", "%d", CellularSMSMmodeText);
+    _at.at_cmd_discard("+CSMP", "=", "%d%d%d%d", FIRST_OCTET_DELIVER_SUBMIT, TP_VALIDITY_PERIOD_24_HOURS, TP_PROTOCOL_IDENTIFIER, SMS_DATA_CODING_SCHEME);
+    _at.at_cmd_discard("+CSDH", "=", "%d", 1);
+
+    return _at.get_last_error();
+}
+
+static constexpr milliseconds_u32 SMS_CONFIRMATION_TIMEOUT = 12s;
 
 nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char *phone_number, const char *message, int msg_len)
 {
@@ -40,10 +103,8 @@ nsapi_size_or_error_t SIM5320CellularSMS::send_sms(const char *phone_number, con
 
     ATHandlerLocker locker(_at);
 
-    _at.cmd_start("AT+CMGS=");
-    _at.write_string(phone_number);
-    _at.cmd_stop();
-    ThisThread::sleep_for(2000);
+    _at.cmd_start_stop("+CMGS", "=", "%s", phone_number);
+    ThisThread::sleep_for(2000ms);
     _at.resp_start("> ", true);
 
     if (!_at.get_last_error()) {
@@ -102,8 +163,7 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, c
     strcpy(message_status, "");
     strcpy(phone_num_tmp, "");
     ATHandlerLocker locker(_at);
-    _at.cmd_start("AT+CMGL=\"ALL\"");
-    _at.cmd_stop();
+    _at.cmd_start_stop("+CMGL", "=", "%s", "ALL");
     _at.resp_start("+CMGL:");
     while (_at.info_resp()) {
         index = _at.read_int();
@@ -166,17 +226,34 @@ nsapi_size_or_error_t SIM5320CellularSMS::get_sms(char *buf, uint16_t buf_len, c
     return message_len;
 }
 
-nsapi_error_t SIM5320CellularSMS::get_sms_message_mode(CellularSMS::CellularSMSMmode &mode)
+void SIM5320CellularSMS::set_sms_callback(Callback<void()> func)
 {
-    int mode_code = 0;
-    ATHandlerLocker locker(_at);
-    _at.cmd_start("AT+CMGF?");
-    _at.cmd_stop();
-    _at.resp_start("+CMGF:");
-    mode_code = _at.read_int();
-    mode = mode_code == 1 ? CellularSMSMmodeText : CellularSMSMmodePDU;
-    _at.resp_stop();
-    return _at.get_last_error();
+    _cb = func;
+}
+
+nsapi_error_t SIM5320CellularSMS::set_cpms(const char *memr, const char *memw, const char *mems)
+{
+    return _at.at_cmd_discard("+CPMS", "=", "%s%s%s", memr, memw, mems);
+}
+
+nsapi_error_t SIM5320CellularSMS::set_csca(const char *sca, int type)
+{
+    return _at.at_cmd_discard("+CSCA", "=", "%s%d", sca, type);
+}
+
+nsapi_size_or_error_t SIM5320CellularSMS::set_cscs(const char *chr_set)
+{
+    return _at.at_cmd_discard("+CSCS", "=", "%s", chr_set);
+}
+
+nsapi_error_t SIM5320CellularSMS::delete_all_messages()
+{
+    return _at.at_cmd_discard("+CMGD", "=1,4");
+}
+
+void SIM5320CellularSMS::set_extra_sim_wait_time(int sim_wait_time)
+{
+    _sim_wait_time = sim_wait_time;
 }
 
 #endif // MBED_CONF_CELLULAR_USE_SMS

@@ -3,7 +3,12 @@
 #include "sim5320_CellularInformation.h"
 #include "sim5320_CellularNetwork.h"
 #include "sim5320_CellularSMS.h"
+
+#include "AT_CellularNetwork.h"
+
+#include "sim5320_trace.h"
 #include "sim5320_utils.h"
+
 using namespace sim5320;
 
 static const intptr_t cellular_properties[AT_CellularDevice::PROPERTY_MAX] = {
@@ -270,39 +275,69 @@ nsapi_error_t SIM5320CellularDevice::set_subscriber_number(const char *number)
     return _at.get_last_error();
 }
 
-AT_CellularInformation *SIM5320CellularDevice::open_information_impl(ATHandler &at)
+CellularInformation *SIM5320CellularDevice::open_information()
 {
-    return new SIM5320CellularInformation(at, *this);
+    return _information_service.open_interface(this);
 }
 
-AT_CellularNetwork *SIM5320CellularDevice::open_network_impl(ATHandler &at)
+void SIM5320CellularDevice::close_information()
 {
-    return new SIM5320CellularNetwork(at, *this);
+    return _information_service.close_interface(this);
 }
+
+CellularNetwork *SIM5320CellularDevice::open_network()
+{
+    return _network_service.open_interface(this);
+}
+
+void SIM5320CellularDevice::close_network()
+{
+    _network_service.close_interface(this);
+}
+
+CellularSMS *SIM5320CellularDevice::open_sms()
+{
+    return _sms_service.open_interface(this);
+}
+
+void SIM5320CellularDevice::close_sms()
+{
+    _sms_service.close_interface(this);
+}
+
+SIM5320CellularInformation *SIM5320CellularDevice::open_information_base_impl(ATHandler &at)
+{
+    return new SIM5320CellularInformation(at);
+}
+
+SIM5320CellularNetwork *SIM5320CellularDevice::open_network_base_impl(ATHandler &at)
+{
+    return new SIM5320CellularNetwork(at);
+}
+
+#if MBED_CONF_CELLULAR_USE_SMS
+SIM5320CellularSMS *SIM5320CellularDevice::open_sms_base_impl(ATHandler &at)
+{
+    return new SIM5320CellularSMS(at);
+}
+#endif // MBED_CONF_CELLULAR_USE_SMS
 
 AT_CellularContext *SIM5320CellularDevice::create_context_impl(ATHandler &at, const char *apn, bool cp_req, bool nonip_req)
 {
     return new SIM5320CellularContext(at, this, apn, cp_req, nonip_req);
 }
 
-SIM5320LocationService *SIM5320CellularDevice::open_location_service_impl(ATHandler &at)
+SIM5320LocationService *SIM5320CellularDevice::open_location_service_base_impl(ATHandler &at)
 {
-    return new SIM5320LocationService(at, *this);
+    return new SIM5320LocationService(at);
 }
 
-#if MBED_CONF_CELLULAR_USE_SMS
-AT_CellularSMS *SIM5320CellularDevice::open_sms_impl(ATHandler &at)
+SIM5320FTPClient *SIM5320CellularDevice::open_ftp_client_base_impl(ATHandler &at)
 {
-    return new SIM5320CellularSMS(at, *this);
-}
-#endif // MBED_CONF_CELLULAR_USE_SMS
-
-SIM5320FTPClient *SIM5320CellularDevice::open_ftp_client_impl(ATHandler &at)
-{
-    return new SIM5320FTPClient(at, *this);
+    return new SIM5320FTPClient(at);
 }
 
-SIM5320TimeService *SIM5320CellularDevice::open_time_service_impl(ATHandler &at)
+SIM5320TimeService *SIM5320CellularDevice::open_time_service_base_impl(ATHandler &at)
 {
-    return new SIM5320TimeService(at, *this);
+    return new SIM5320TimeService(at);
 }

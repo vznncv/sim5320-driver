@@ -1,8 +1,9 @@
 #ifndef SIM5320_CELLULARSTACK_H
 #define SIM5320_CELLULARSTACK_H
 
-#include "AT_CellularStack.h"
 #include "mbed.h"
+
+#include "AT_CellularStack.h"
 
 namespace sim5320 {
 

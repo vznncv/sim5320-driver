@@ -1,11 +1,7 @@
 ﻿#include "sim5320_CellularStack.h"
-#include "mbed-trace/mbed_trace.h"
-#include "sim5320_utils.h"
 
-#ifdef TRACE_GROUP
-#undef TRACE_GROUP
-#endif
-#define TRACE_GROUP "sim5320_cellular_stack"
+#include "sim5320_trace.h"
+#include "sim5320_utils.h"
 
 using namespace sim5320;
 
@@ -158,7 +154,7 @@ nsapi_error_t SIM5320CellularStack::socket_close_impl(int sock_id)
     _at.cmd_stop();
     // get OK or ERROR (note: a URC code can appear before OK or ERROR)
     // FIXME: without delay it can cause freezing if a UDP socket is used
-    ThisThread::sleep_for(10);
+    ThisThread::sleep_for(10ms);
     _at.resp_start("OK");
     _at.resp_stop();
 
