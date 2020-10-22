@@ -101,7 +101,6 @@ int sim5320::vread_full_fuzzy_response(ATHandler &at, bool wait_response_after_o
 ATHandlerLocker::ATHandlerLocker(ATHandler &at, mbed::chrono::milliseconds_u32 timeout)
     : _at(at)
     , _timeout(timeout)
-    , _lock_count(1)
 {
     _at.lock();
     if (timeout > 0ms) {
@@ -114,15 +113,13 @@ sim5320::ATHandlerLocker::~ATHandlerLocker()
     if (_timeout > 0ms) {
         _at.restore_at_timeout();
     }
-    for (int i = 0; i < _lock_count; i++) {
-        _at.unlock();
-    }
+    _at.unlock();
 }
 
 void sim5320::ATHandlerLocker::reset_timeout()
 {
     _at.lock();
-    _lock_count++;
+    _at.unlock();
 }
 
 /**
