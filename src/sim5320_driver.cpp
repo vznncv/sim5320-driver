@@ -159,6 +159,9 @@ nsapi_error_t SIM5320::request_to_start()
     if (_startup_request_count == 0) {
         tr_info("sim5320: device up");
         err = _device->init();
+        if (err) {
+            return err;
+        }
     }
     _startup_request_count++;
     return err;

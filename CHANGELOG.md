@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- Fix `sim5320::SIM5320::request_to_start` method to skip startup counter increment in case of error.
+- Fix `sim5320::ATHandlerLocker::reset_timeout` if it's invoked multiple times.
+- Fix `sim5320::SIM5320LocationService` initialization.
+- Adjust `sim5320::SIM5320FTPClient` internal settings to improve upload performance.
+
 ## [0.4.0] - 2020-10-04
 ### Changed
 - Add compatibility with Mbed OS `6.3` and drop support of lower versions.

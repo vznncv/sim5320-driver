@@ -59,6 +59,8 @@ nsapi_error_t SIM5320LocationService::init()
     at_cmdw_set_i(_at, "+CGPSAUTO", 0, false);
     // set position mode (AT+CGPSPMD) to 127
     at_cmdw_set_i(_at, "+CGPSPMD", 127, false);
+    // ensure that GPS debug mode is disabled
+    _at.at_cmd_discard("+CGPSFTM", "=", "%d", 0);
 
     return _at.get_last_error();
 }

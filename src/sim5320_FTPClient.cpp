@@ -486,9 +486,10 @@ nsapi_error_t SIM5320FTPClient::listdir(const char *path, SIM5320FTPClient::dir_
     return _get_data_impl(path, callback(&listdir_callback, &listdir_callback_t::process), "LIST");
 }
 
-#define PUT_UNSEND_MAX 4096
-#define PUT_UNSEND_MIN 128
-static constexpr milliseconds_u32 FTP_PUT_DATA_WAIT_TIMEOUT = 1ms;
+#define PUT_UNSEND_MAX 6144
+#define PUT_UNSEND_MIN 2048
+static constexpr size_t FTP_PUT_DATA_WAIT_TIMEOUT_SCHEME_SIZE = 8;
+static constexpr milliseconds_u32 FTP_PUT_DATA_WAIT_TIMEOUT_SCHEME[FTP_PUT_DATA_WAIT_TIMEOUT_SCHEME_SIZE] = { 1ms, 5ms, 20ms, 50ms, 100ms, 200ms, 500ms, 1000ms };
 #define FTP_HACK_BLOCK_SIZE 163840
 #define FTP_HACK_BLOCK_DELAY 1000
 
@@ -504,8 +505,10 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
     char *buf = _get_buffer();
 
     ssize_t block_size = 1;
+    ssize_t total_size = 0;
     int data_writer_error = 0;
     int pending_data_i = PUT_UNSEND_MAX + 1;
+    size_t put_wait_timeout_scheme_i;
 
     while (true) {
         // as the operation can be long we should reset ATHanlder timeout
@@ -516,6 +519,7 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
         // check if we have some amount of unsent data
         if (pending_data_i >= PUT_UNSEND_MAX) {
             // wait till output buffer become empty almost empty
+            put_wait_timeout_scheme_i = 0;
             while (true) {
                 _at.at_cmd_int("+CFTPSPUT", "?", pending_data_i, "");
                 // exit if error
@@ -523,7 +527,10 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
                     break;
                 }
                 if (pending_data_i > PUT_UNSEND_MIN) {
-                    ThisThread::sleep_for(FTP_PUT_DATA_WAIT_TIMEOUT);
+                    ThisThread::sleep_for(FTP_PUT_DATA_WAIT_TIMEOUT_SCHEME[put_wait_timeout_scheme_i]);
+                    if (put_wait_timeout_scheme_i < (FTP_PUT_DATA_WAIT_TIMEOUT_SCHEME_SIZE + 1)) {
+                        put_wait_timeout_scheme_i++;
+                    }
                 } else {
                     break;
                 }
@@ -546,6 +553,7 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
             data_writer_error = NSAPI_ERROR_PARAMETER;
             break;
         }
+        total_size += block_size;
 
         // send data
         if (path) {
@@ -568,9 +576,15 @@ nsapi_error_t SIM5320FTPClient::put(const char *path, Callback<ssize_t(uint8_t *
     // mark that transmission has been finished, even error occurs
     err = _at.get_last_error();
     _at.clear_error();
-    _at.cmd_start_stop("+CFTPSPUT", "");
-    err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSPUT");
-    RETURN_IF_ERROR(err);
+
+    if (total_size != 0) {
+        _at.cmd_start_stop("+CFTPSPUT", "");
+        err = read_fuzzy_ftp_response(_at, true, false, "+CFTPSPUT");
+        RETURN_IF_ERROR(err);
+    } else {
+        // note: sim5320 implementation doesn't allow to create empty files, so skip them
+        tr_info("Cannot create empty file. Skip it ...");
+    }
 
     return data_writer_error >= 0 ? NSAPI_ERROR_OK : data_writer_error;
 }
